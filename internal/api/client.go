@@ -9,19 +9,23 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
 const (
-	baseURL   = "https://www.floatplane.com"
-	authURL   = "https://auth.floatplane.com/realms/floatplane/protocol/openid-connect"
-	userAgent = "FetchPlane v0.1, CFNetwork"
+	baseURL          = "https://www.floatplane.com"
+	authURL          = "https://auth.floatplane.com/realms/floatplane/protocol/openid-connect"
+	userAgent        = "FetchPlane v0.1, CFNetwork"
+	deliveryInterval = 31 * time.Second
 )
 
 type Client struct {
-	http        *http.Client
-	accessToken string
-	debug       bool
+	http         *http.Client
+	accessToken  string
+	debug        bool
+	deliveryMu   sync.Mutex
+	nextDelivery time.Time
 }
 
 func NewClient() (*Client, error) {
@@ -234,6 +238,23 @@ func (c *Client) GetSubscriptions() ([]Subscription, error) {
 	return subs, nil
 }
 
+func (c *Client) waitForDeliverySlot() {
+	c.deliveryMu.Lock()
+	now := time.Now()
+	wait := time.Duration(0)
+	if now.Before(c.nextDelivery) {
+		wait = time.Until(c.nextDelivery)
+		now = c.nextDelivery
+	}
+	c.nextDelivery = now.Add(deliveryInterval)
+	c.deliveryMu.Unlock()
+
+	if wait > 0 {
+		log.Printf("delivery pacing: sleeping %s before next delivery/info request", wait.Round(time.Millisecond))
+		time.Sleep(wait)
+	}
+}
+
 func (c *Client) GetCreatorInfo(creatorID string) (*CreatorInfo, error) {
 	u, _ := url.Parse(baseURL + "/api/v3/creator/info")
 	q := u.Query()
@@ -291,6 +312,8 @@ func (c *Client) GetBlogPosts(creatorID string, limit, fetchAfter int) ([]BlogPo
 
 // GetDeliveryURL returns the preferred download URL for a video entity ID.
 func (c *Client) GetDeliveryURL(entityID string) (string, error) {
+	c.waitForDeliverySlot()
+
 	u, _ := url.Parse(baseURL + "/api/v3/delivery/info")
 	q := u.Query()
 	q.Set("entityId", entityID)

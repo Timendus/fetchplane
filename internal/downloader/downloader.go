@@ -31,11 +31,11 @@ func safeFilename(s string) string {
 // Download streams a video from videoURL to a stable per-attachment filename.
 // Returns the target filename, whether it was downloaded, and any error.
 func Download(fetch func(string) (*http.Response, error), downloadDir, creatorName, channelName, postTitle, attachmentTitle, attachmentID, videoURL string) (string, bool, error) {
-	dir, basename := targetPathParts(downloadDir, creatorName, channelName, postTitle, attachmentTitle, attachmentID)
+	dir, _ := targetPathParts(downloadDir, creatorName, channelName, postTitle, attachmentTitle, attachmentID)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return "", false, fmt.Errorf("mkdir %s: %w", dir, err)
 	}
-	filename := basename + ".mp4"
+	filename := VideoPath(downloadDir, creatorName, channelName, postTitle, attachmentTitle, attachmentID)
 
 	if _, err := os.Stat(filename); err == nil {
 		log.Printf("skip (exists): %s", filename)
@@ -76,6 +76,19 @@ func Download(fetch func(string) (*http.Response, error), downloadDir, creatorNa
 
 	log.Printf("done: %s (%.1f MB)", filename, float64(written)/1024/1024)
 	return filename, true, nil
+}
+
+func VideoPath(downloadDir, creatorName, channelName, postTitle, attachmentTitle, attachmentID string) string {
+	_, basename := targetPathParts(downloadDir, creatorName, channelName, postTitle, attachmentTitle, attachmentID)
+	return basename + ".mp4"
+}
+
+func VideoExists(downloadDir, creatorName, channelName, postTitle, attachmentTitle, attachmentID string) (string, bool) {
+	filename := VideoPath(downloadDir, creatorName, channelName, postTitle, attachmentTitle, attachmentID)
+	if _, err := os.Stat(filename); err == nil {
+		return filename, true
+	}
+	return filename, false
 }
 
 func SaveThumbnail(fetch func(string) (*http.Response, error), downloadDir, creatorName, channelName, postTitle, attachmentTitle, attachmentID, thumbnailURL string) (string, bool, error) {

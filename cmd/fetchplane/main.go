@@ -258,6 +258,12 @@ func processCreator(cfg *config.Config, client *api.Client, st *state.State, cre
 					continue
 				}
 
+				if filename, exists := downloader.VideoExists(cfg.DownloadDir, creatorTitle, channelTitle, post.Title, video.Title, video.ID); exists {
+					st.RememberAttachment(creatorID, post.ID, video.ID, filename, released)
+					log.Printf("  skip delivery lookup (exists): %s", filename)
+					continue
+				}
+
 				thumbnailURL := ""
 				if post.Thumbnail != nil {
 					thumbnailURL = post.Thumbnail.Path
