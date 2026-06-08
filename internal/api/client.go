@@ -83,6 +83,9 @@ func (c *Client) get(rawURL string) (*http.Response, error) {
 }
 
 func (c *Client) GetMedia(rawURL string) (*http.Response, error) {
+	if strings.HasPrefix(rawURL, "/") {
+		rawURL = baseURL + rawURL
+	}
 	return c.get(rawURL)
 }
 

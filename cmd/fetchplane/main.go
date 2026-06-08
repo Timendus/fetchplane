@@ -218,7 +218,7 @@ func processCreator(cfg *config.Config, client *api.Client, st *state.State, cre
 			break
 		}
 
-		done := false
+		done := true
 		for _, post := range posts {
 			attachments := post.Attachments()
 			channelTitle := creatorTitle
@@ -234,18 +234,20 @@ func processCreator(cfg *config.Config, client *api.Client, st *state.State, cre
 			st.RememberLatestRelease(creatorID, released)
 
 			// A user-specified since date is a hard stop. We should never walk older
-			// history just because it hasn't been downloaded before.
+			// history just because it hasn't been downloaded before. However, we do
+			// not assume the page is perfectly ordered; we keep scanning this page and
+			// only stop paginating once an entire page is older than the cutoff.
 			if !cfg.Since.IsZero() && !released.After(cfg.Since) {
-				done = true
-				break
+				continue
 			}
+			done = false
 
 			// The state-based cutoff is softer: only stop once we've reached posts we
 			// have already fully processed for this creator.
 			if !incrementalCutoff.IsZero() && !released.After(incrementalCutoff) && st.HasAllAttachments(attachments) {
-				done = true
-				break
+				continue
 			}
+			done = false
 
 			if len(attachments) == 0 {
 				continue // picture or text post, nothing to download
@@ -254,6 +256,17 @@ func processCreator(cfg *config.Config, client *api.Client, st *state.State, cre
 			for _, video := range attachments {
 				if st.HasAttachment(video.ID) {
 					continue
+				}
+
+				thumbnailURL := ""
+				if post.Thumbnail != nil {
+					thumbnailURL = post.Thumbnail.Path
+				}
+				if _, _, err := downloader.SaveThumbnail(client.GetMedia, cfg.DownloadDir, creatorTitle, channelTitle, post.Title, video.Title, video.ID, thumbnailURL); err != nil {
+					log.Printf("  error saving thumbnail for %q: %v", post.Title, err)
+				}
+				if _, _, err := downloader.SaveNFO(cfg.DownloadDir, creatorTitle, channelTitle, post.Title, video.Title, video.ID, creatorTitle, post.Text, released); err != nil {
+					log.Printf("  error saving nfo for %q: %v", post.Title, err)
 				}
 
 				dlURL, err := client.GetDeliveryURL(video.ID)

@@ -43,10 +43,16 @@ type BlogPost struct {
 	ID               string               `json:"id"`
 	GUID             string               `json:"guid"`
 	Title            string               `json:"title"`
+	Text             string               `json:"text"`
 	ReleaseDate      string               `json:"releaseDate"` // e.g. "2024-01-15T12:00:00.000Z"
+	Thumbnail        *Thumbnail           `json:"thumbnail"`
 	Channel          ChannelRef           `json:"channel"`
 	AttachmentOrder  []string             `json:"attachmentOrder"`
 	VideoAttachments []VideoAttachmentRef `json:"videoAttachments"`
+}
+
+type Thumbnail struct {
+	Path string `json:"path"`
 }
 
 type ChannelRef struct {
