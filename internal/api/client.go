@@ -261,7 +261,7 @@ func (c *Client) GetBlogPosts(creatorID string, limit, fetchAfter int) ([]BlogPo
 	return result, nil
 }
 
-// GetDeliveryURL returns the highest-quality MP4 download URL for a video entity ID.
+// GetDeliveryURL returns the preferred download URL for a video entity ID.
 func (c *Client) GetDeliveryURL(entityID string) (string, error) {
 	u, _ := url.Parse(baseURL + "/api/v3/delivery/info")
 	q := u.Query()

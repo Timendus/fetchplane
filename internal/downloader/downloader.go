@@ -13,8 +13,6 @@ import (
 	"regexp"
 	"strings"
 	"time"
-
-	nethtml "golang.org/x/net/html"
 )
 
 var unsafeChars = regexp.MustCompile(`[^\w\s\-\.]`)
@@ -133,12 +131,13 @@ func SaveNFO(downloadDir, creatorName, channelName, postTitle, attachmentTitle, 
 		return filename, false, nil
 	}
 
+	description = cleanDescription(description)
 	doc := episodeDetails{
 		XMLName:     xml.Name{Local: "episodedetails"},
 		Title:       displayTitle(postTitle, attachmentTitle),
 		ShowTitle:   showTitle,
-		Description: cleanDescription(description),
-		Plot:        cleanDescription(description),
+		Description: description,
+		Plot:        description,
 		Aired:       released.Format("2006-01-02"),
 		Season:      released.Format("2006"),
 		Episode:     released.Format("0102150405"),
@@ -206,141 +205,7 @@ func extensionForResponse(resp *http.Response, rawURL string) string {
 }
 
 func cleanDescription(input string) string {
-	text := strings.TrimSpace(input)
-	if text == "" {
-		return ""
-	}
-
-	if strings.Contains(text, "<") && strings.Contains(text, ">") {
-		if rendered, ok := parseHTMLFragment(text); ok && strings.TrimSpace(rendered) != "" {
-			text = rendered
-		} else if doc, err := nethtml.Parse(strings.NewReader(text)); err == nil {
-			var b strings.Builder
-			renderHTMLText(&b, findBody(doc))
-			if parsed := strings.TrimSpace(b.String()); parsed != "" {
-				text = parsed
-			}
-		}
-	}
-
-	text = strings.ReplaceAll(text, "\u00a0", " ")
-	text = strings.ReplaceAll(text, "\r\n", "\n")
-	text = strings.ReplaceAll(text, "\r", "\n")
-
-	lines := strings.Split(text, "\n")
-	cleaned := make([]string, 0, len(lines))
-	blankCount := 0
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			blankCount++
-			if blankCount <= 2 {
-				cleaned = append(cleaned, "")
-			}
-			continue
-		}
-		blankCount = 0
-		cleaned = append(cleaned, line)
-	}
-
-	return strings.TrimSpace(strings.Join(cleaned, "\n"))
-}
-
-func parseHTMLFragment(input string) (string, bool) {
-	context := &nethtml.Node{
-		Type: nethtml.ElementNode,
-		Data: "div",
-	}
-	nodes, err := nethtml.ParseFragment(strings.NewReader(input), context)
-	if err != nil || len(nodes) == 0 {
-		return "", false
-	}
-
-	var b strings.Builder
-	for _, node := range nodes {
-		renderHTMLText(&b, node)
-	}
-	return b.String(), true
-}
-
-func findBody(n *nethtml.Node) *nethtml.Node {
-	if n == nil {
-		return nil
-	}
-	if n.Type == nethtml.ElementNode && n.Data == "body" {
-		return n
-	}
-	for child := n.FirstChild; child != nil; child = child.NextSibling {
-		if body := findBody(child); body != nil {
-			return body
-		}
-	}
-	return n
-}
-
-func renderHTMLText(b *strings.Builder, n *nethtml.Node) {
-	if n == nil {
-		return
-	}
-
-	switch n.Type {
-	case nethtml.TextNode:
-		b.WriteString(n.Data)
-		return
-	case nethtml.ElementNode:
-		switch n.Data {
-		case "br":
-			b.WriteString("\n")
-			return
-		case "p", "div", "section", "article":
-			renderChildren(b, n)
-			b.WriteString("\n\n")
-			return
-		case "li":
-			b.WriteString("- ")
-			renderChildren(b, n)
-			b.WriteString("\n")
-			return
-		case "a":
-			label := strings.TrimSpace(renderNodeToString(n))
-			href := strings.TrimSpace(attrValue(n, "href"))
-			switch {
-			case href == "":
-				b.WriteString(label)
-			case label == "" || label == href:
-				b.WriteString(href)
-			default:
-				b.WriteString(label)
-				b.WriteString("\n[")
-				b.WriteString(href)
-				b.WriteString("]")
-			}
-			return
-		}
-	}
-
-	renderChildren(b, n)
-}
-
-func renderChildren(b *strings.Builder, n *nethtml.Node) {
-	for child := n.FirstChild; child != nil; child = child.NextSibling {
-		renderHTMLText(b, child)
-	}
-}
-
-func renderNodeToString(n *nethtml.Node) string {
-	var b strings.Builder
-	renderChildren(&b, n)
-	return b.String()
-}
-
-func attrValue(n *nethtml.Node, key string) string {
-	for _, attr := range n.Attr {
-		if attr.Key == key {
-			return attr.Val
-		}
-	}
-	return ""
+	return strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(input, "\r\n", "\n"), "\r", "\n"))
 }
 
 // copyWithProgress copies src to dst, logging progress every ~10%.

@@ -233,10 +233,8 @@ func processCreator(cfg *config.Config, client *api.Client, st *state.State, cre
 			}
 			st.RememberLatestRelease(creatorID, released)
 
-			// A user-specified since date is a hard stop. We should never walk older
-			// history just because it hasn't been downloaded before. However, we do
-			// not assume the page is perfectly ordered; we keep scanning this page and
-			// only stop paginating once an entire page is older than the cutoff.
+			// Keep scanning the current page even after hitting older posts because
+			// the feed is not guaranteed to be perfectly ordered.
 			if !cfg.Since.IsZero() && !released.After(cfg.Since) {
 				continue
 			}
