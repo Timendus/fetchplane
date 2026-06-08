@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -20,6 +21,7 @@ const (
 type Client struct {
 	http        *http.Client
 	accessToken string
+	debug       bool
 }
 
 func NewClient() (*Client, error) {
@@ -32,6 +34,10 @@ func NewClient() (*Client, error) {
 
 func (c *Client) SetAccessToken(token string) {
 	c.accessToken = token
+}
+
+func (c *Client) SetDebug(debug bool) {
+	c.debug = debug
 }
 
 func (c *Client) do(req *http.Request) (*http.Response, error) {
@@ -52,9 +58,26 @@ func (c *Client) do(req *http.Request) (*http.Response, error) {
 			req.Body = body
 		}
 
+		start := time.Now()
+		if c.debug {
+			log.Printf("http request: %s %s", req.Method, req.URL.String())
+		}
 		resp, err := c.http.Do(req)
 		if err != nil {
+			if c.debug {
+				log.Printf("http error: %s %s (%s): %v", req.Method, req.URL.String(), time.Since(start).Round(time.Millisecond), err)
+			}
 			return nil, err
+		}
+		if c.debug {
+			log.Printf(
+				"http response: %s %s -> %d (%s, %d bytes)",
+				req.Method,
+				req.URL.String(),
+				resp.StatusCode,
+				time.Since(start).Round(time.Millisecond),
+				resp.ContentLength,
+			)
 		}
 		if resp.StatusCode != http.StatusTooManyRequests {
 			return resp, nil
@@ -64,8 +87,13 @@ func (c *Client) do(req *http.Request) (*http.Response, error) {
 		if value := resp.Header.Get("Retry-After"); value != "" {
 			if seconds, err := strconv.Atoi(value); err == nil && seconds > 0 {
 				retryAfter = time.Duration(seconds) * time.Second
+			} else if retryTime, err := http.ParseTime(value); err == nil {
+				if delay := time.Until(retryTime); delay > 0 {
+					retryAfter = delay
+				}
 			}
 		}
+		log.Printf("http rate limit: %s %s -> sleeping %s before retry", req.Method, req.URL.String(), retryAfter.Round(time.Millisecond))
 		io.Copy(io.Discard, resp.Body)
 		resp.Body.Close()
 		time.Sleep(retryAfter)

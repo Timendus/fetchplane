@@ -19,6 +19,7 @@ const pageSize = 20
 
 func main() {
 	daemon := flag.Bool("daemon", false, "run continuously, polling on FP_POLL_INTERVAL (default 300s)")
+	debug := flag.Bool("debug", false, "log HTTP requests and responses")
 	flag.Parse()
 
 	cfg, err := config.Load()
@@ -39,6 +40,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("client error: %v", err)
 	}
+	client.SetDebug(*debug)
 
 	if *daemon {
 		runDaemon(cfg, client, st)
