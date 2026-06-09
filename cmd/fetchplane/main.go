@@ -15,7 +15,7 @@ import (
 )
 
 func main() {
-	daemon := flag.Bool("daemon", false, "run continuously, polling on FP_POLL_INTERVAL (default 300s)")
+	daemon := flag.Bool("daemon", false, "run continuously, polling on pollInterval from config.yaml (default 600s)")
 	debug := flag.Bool("debug", false, "log HTTP requests and responses")
 	flag.Parse()
 

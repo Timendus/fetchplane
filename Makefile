@@ -9,4 +9,4 @@ docker-build:
 	docker build -t $(IMAGE) .
 
 run:
-	docker run --rm -it --env-file .env -v $(PWD)/downloads:/data $(IMAGE)
+	docker run --rm -it -v $(PWD)/data:/data $(IMAGE)

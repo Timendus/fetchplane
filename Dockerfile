@@ -14,6 +14,8 @@ RUN apk add --no-cache ca-certificates
 
 WORKDIR /app
 
+ENV STORAGE_PATH=/data
+
 COPY --from=build /out/fetchplane /usr/local/bin/fetchplane
 
 VOLUME ["/data"]
