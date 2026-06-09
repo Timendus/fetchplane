@@ -226,10 +226,11 @@ type SubtitleTrack struct {
 }
 
 func targetPathParts(downloadDir, creatorName, channelName, postTitle, attachmentTitle, attachmentID string) (string, string) {
-	dir := filepath.Join(downloadDir, safeFilename(creatorName))
+	dirName := safeFilename(creatorName)
 	if channel := safeFilename(channelName); channel != "" && channel != safeFilename(creatorName) {
-		dir = filepath.Join(dir, channel)
+		dirName = channel
 	}
+	dir := filepath.Join(downloadDir, dirName)
 	name := displayTitle(postTitle, attachmentTitle)
 	name = safeFilename(name)
 	if name == "" {
