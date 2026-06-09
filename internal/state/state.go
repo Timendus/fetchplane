@@ -6,25 +6,10 @@ import (
 	"os"
 	"path/filepath"
 	"time"
-
-	"github.com/Timendus/fetchplane/internal/floatplane"
 )
 
 type State struct {
-	Creators    map[string]CreatorState    `json:"creators"`
-	Attachments map[string]AttachmentState `json:"attachments"`
-	Auth        AuthState                  `json:"auth"`
-}
-
-type CreatorState struct {
-	LatestReleaseDate string `json:"latestReleaseDate,omitempty"`
-}
-
-type AttachmentState struct {
-	CreatorID   string `json:"creatorId,omitempty"`
-	PostID      string `json:"postId,omitempty"`
-	Filename    string `json:"filename,omitempty"`
-	ReleaseDate string `json:"releaseDate,omitempty"`
+	Auth AuthState `json:"auth"`
 }
 
 type AuthState struct {
@@ -49,19 +34,14 @@ func Load(path string) (*State, error) {
 	if err := json.Unmarshal(data, &st); err != nil {
 		return nil, err
 	}
-	st.ensureMaps()
 	return &st, nil
 }
 
 func New() *State {
-	st := &State{}
-	st.ensureMaps()
-	return st
+	return &State{}
 }
 
 func (s *State) Save(path string) error {
-	s.ensureMaps()
-
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return err
 	}
@@ -78,68 +58,15 @@ func (s *State) Save(path string) error {
 	return os.Rename(tmp, path)
 }
 
-func (s *State) HasAttachment(attachmentID string) bool {
-	s.ensureMaps()
-	_, ok := s.Attachments[attachmentID]
-	return ok
-}
-
-func (s *State) HasAllAttachments(attachments []floatplane.VideoAttachment) bool {
-	for _, attachment := range attachments {
-		if !s.HasAttachment(attachment.ID) {
-			return false
-		}
-	}
-	return true
-}
-
-func (s *State) RememberAttachment(creatorID, postID, attachmentID, filename string, released time.Time) {
-	s.ensureMaps()
-	s.Attachments[attachmentID] = AttachmentState{
-		CreatorID:   creatorID,
-		PostID:      postID,
-		Filename:    filename,
-		ReleaseDate: released.UTC().Format(time.RFC3339Nano),
-	}
-	s.RememberLatestRelease(creatorID, released)
-}
-
-func (s *State) RememberLatestRelease(creatorID string, released time.Time) {
-	s.ensureMaps()
-	current := s.LatestReleaseTime(creatorID)
-	if !released.After(current) {
-		return
-	}
-	s.Creators[creatorID] = CreatorState{
-		LatestReleaseDate: released.UTC().Format(time.RFC3339Nano),
-	}
-}
-
-func (s *State) LatestReleaseTime(creatorID string) time.Time {
-	s.ensureMaps()
-	creator, ok := s.Creators[creatorID]
-	if !ok || creator.LatestReleaseDate == "" {
-		return time.Time{}
-	}
-	t, err := time.Parse(time.RFC3339Nano, creator.LatestReleaseDate)
-	if err != nil {
-		return time.Time{}
-	}
-	return t
-}
-
 func (s *State) AccessToken() string {
-	s.ensureMaps()
 	return s.Auth.AccessToken
 }
 
 func (s *State) RefreshToken() string {
-	s.ensureMaps()
 	return s.Auth.RefreshToken
 }
 
 func (s *State) TokenExpiresAt() time.Time {
-	s.ensureMaps()
 	if s.Auth.ExpiresAt == "" {
 		return time.Time{}
 	}
@@ -151,7 +78,6 @@ func (s *State) TokenExpiresAt() time.Time {
 }
 
 func (s *State) SetAuth(clientID string, tokenType string, scope string, accessToken string, refreshToken string, expiresAt time.Time) {
-	s.ensureMaps()
 	s.Auth = AuthState{
 		ClientID:     clientID,
 		AccessToken:  accessToken,
@@ -163,15 +89,5 @@ func (s *State) SetAuth(clientID string, tokenType string, scope string, accessT
 }
 
 func (s *State) ClearAuth() {
-	s.ensureMaps()
 	s.Auth = AuthState{}
-}
-
-func (s *State) ensureMaps() {
-	if s.Creators == nil {
-		s.Creators = map[string]CreatorState{}
-	}
-	if s.Attachments == nil {
-		s.Attachments = map[string]AttachmentState{}
-	}
 }

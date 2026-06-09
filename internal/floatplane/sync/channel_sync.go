@@ -2,6 +2,7 @@ package sync
 
 import (
 	"log"
+	"time"
 
 	"github.com/Timendus/fetchplane/internal/floatplane"
 	"github.com/Timendus/fetchplane/internal/library"
@@ -74,6 +75,40 @@ func (s *Service) prepareChannelLibrary(creatorTitle string, channel floatplane.
 	if channel.Icon != nil && channel.Icon.Path != "" {
 		if _, _, err := library.SaveLibraryArtwork(s.client.GetMedia, s.cfg.DownloadDir, creatorTitle, channel.Title, "folder", channel.Icon.Path); err != nil {
 			log.Printf("  error saving channel poster for %s: %v", channel.Title, err)
+		}
+	}
+	return nil
+}
+
+func (s *Service) removeExpiredVideos(prepared *preparedCreator) error {
+	cutoff, ok := s.removalCutoff(time.Now())
+	if !ok {
+		return nil
+	}
+
+	rootDir, err := library.EnsureLibraryDir(s.cfg.DownloadDir, prepared.Info.Title, "")
+	if err != nil {
+		return err
+	}
+	dirs := []string{rootDir}
+	for _, channel := range prepared.Channels {
+		if channel.Title == "" || channel.Title == prepared.Info.Title {
+			continue
+		}
+		dir, err := library.EnsureLibraryDir(s.cfg.DownloadDir, prepared.Info.Title, channel.Title)
+		if err != nil {
+			return err
+		}
+		dirs = append(dirs, dir)
+	}
+
+	for _, dir := range dirs {
+		removed, err := library.RemoveOlderThan(dir, cutoff)
+		if err != nil {
+			return err
+		}
+		if removed > 0 {
+			log.Printf("  removed %d expired video(s) from %s", removed, dir)
 		}
 	}
 	return nil

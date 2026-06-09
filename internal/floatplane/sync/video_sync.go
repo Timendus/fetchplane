@@ -13,7 +13,9 @@ const pageSize = 20
 func (s *Service) processCreator(prepared *preparedCreator) error {
 	creator := prepared.Info
 	fetchAfter := 0
-	incrementalCutoff := s.state.LatestReleaseTime(creator.ID)
+	incrementalCutoff := s.latestReleaseTime(creator.ID)
+	now := time.Now()
+	downloadCutoff, hasDownloadCutoff := s.downloadCutoff(now)
 
 	for {
 		posts, err := s.client.GetBlogPosts(creator.ID, pageSize, fetchAfter)
@@ -24,7 +26,7 @@ func (s *Service) processCreator(prepared *preparedCreator) error {
 			break
 		}
 
-		done := true
+		pageHasUsefulPosts := false
 		for _, post := range posts {
 			attachments := post.Attachments()
 			channelTitle := resolveChannelTitle(creator.Title, post.Channel, prepared.Channels)
@@ -34,89 +36,101 @@ func (s *Service) processCreator(prepared *preparedCreator) error {
 				log.Printf("  could not parse release date %q for %q, skipping", post.ReleaseDate, post.Title)
 				continue
 			}
-			s.state.RememberLatestRelease(creator.ID, released)
-
-			// Keep scanning the current page even after hitting older posts because
-			// the feed is not guaranteed to be perfectly ordered.
-			if !s.cfg.Since.IsZero() && !released.After(s.cfg.Since) {
-				continue
-			}
-			done = false
-
-			// The state-based cutoff is softer: only stop once we've reached posts we
-			// have already fully processed for this creator.
-			if !incrementalCutoff.IsZero() && !released.After(incrementalCutoff) && s.state.HasAllAttachments(attachments) {
-				continue
-			}
-			done = false
+			s.rememberLatestRelease(creator.ID, released)
 
 			if len(attachments) == 0 {
 				continue
 			}
 
+			postHasVideoFiles := allVideoFilesExist(s.cfg.DownloadDir, creator.Title, channelTitle, post.Title, attachments)
+			postWithinDownloadWindow := !hasDownloadCutoff || released.After(downloadCutoff)
+
+			// During a single daemon lifetime, stop revisiting older pages once we've
+			// already seen them and all of their videos are present on disk.
+			if !incrementalCutoff.IsZero() && !released.After(incrementalCutoff) && postHasVideoFiles {
+				continue
+			}
+
+			// On restart, the library on disk becomes the source of truth. Old posts
+			// without local videos are skipped instead of pulling backlog.
+			if !postWithinDownloadWindow && !postHasVideoFiles {
+				continue
+			}
+
+			pageHasUsefulPosts = true
 			for _, video := range attachments {
-				if s.state.HasAttachment(video.ID) {
-					continue
-				}
+				filename, exists := library.VideoExists(s.cfg.DownloadDir, creator.Title, channelTitle, post.Title, video.Title, video.ID)
+				if !exists {
+					if !postWithinDownloadWindow {
+						continue
+					}
+					dlURL, err := s.client.GetDeliveryURL(video.ID)
+					if err != nil {
+						log.Printf("  error getting delivery URL for %q: %v", post.Title, err)
+						continue
+					}
 
-				if filename, exists := library.VideoExists(s.cfg.DownloadDir, creator.Title, channelTitle, post.Title, video.Title, video.ID); exists {
-					s.state.RememberAttachment(creator.ID, post.ID, video.ID, filename, released)
-					log.Printf("  skip delivery lookup (exists): %s", filename)
-					continue
-				}
-
-				thumbnailURL := ""
-				if post.Thumbnail != nil {
-					thumbnailURL = post.Thumbnail.Path
-				}
-				if _, _, err := library.SaveThumbnail(s.client.GetMedia, s.cfg.DownloadDir, creator.Title, channelTitle, post.Title, video.Title, video.ID, thumbnailURL); err != nil {
-					log.Printf("  error saving thumbnail for %q: %v", post.Title, err)
-				}
-				if _, _, err := library.SaveNFO(s.cfg.DownloadDir, creator.Title, channelTitle, post.Title, video.Title, video.ID, creator.Title, post.Text, released); err != nil {
-					log.Printf("  error saving nfo for %q: %v", post.Title, err)
-				}
-
-				videoInfo, err := s.client.GetVideoInfo(video.ID)
-				if err != nil {
-					log.Printf("  error getting video info for %q: %v", post.Title, err)
+					filename, _, err = library.Download(s.client.GetMedia, s.cfg.DownloadDir, creator.Title, channelTitle, post.Title, video.Title, video.ID, dlURL)
+					if err != nil {
+						log.Printf("  error downloading %q: %v", post.Title, err)
+						continue
+					}
 				} else {
-					subtitles := make([]library.SubtitleTrack, 0, len(videoInfo.TextTracks))
-					for _, track := range videoInfo.TextTracks {
-						if track.Kind != "captions" {
-							continue
-						}
-						subtitles = append(subtitles, library.SubtitleTrack{
-							URL:      track.Src,
-							Language: track.Language,
-						})
-					}
-					if err := library.SaveSubtitles(s.client.GetPublic, s.cfg.DownloadDir, creator.Title, channelTitle, post.Title, video.Title, video.ID, subtitles); err != nil {
-						log.Printf("  error saving subtitles for %q: %v", post.Title, err)
-					}
+					log.Printf("  video exists: %s", filename)
 				}
 
-				dlURL, err := s.client.GetDeliveryURL(video.ID)
-				if err != nil {
-					log.Printf("  error getting delivery URL for %q: %v", post.Title, err)
-					continue
+				if err := s.ensureVideoSidecars(creator.Title, channelTitle, post, video, released); err != nil {
+					log.Printf("  error saving metadata for %q: %v", post.Title, err)
 				}
-
-				filename, _, err := library.Download(s.client.GetMedia, s.cfg.DownloadDir, creator.Title, channelTitle, post.Title, video.Title, video.ID, dlURL)
-				if err != nil {
-					log.Printf("  error downloading %q: %v", post.Title, err)
-					continue
-				}
-				s.state.RememberAttachment(creator.ID, post.ID, video.ID, filename, released)
 			}
 		}
 
-		if done || len(posts) < pageSize {
+		if !pageHasUsefulPosts || len(posts) < pageSize {
 			break
 		}
 		fetchAfter += len(posts)
 	}
 
 	return nil
+}
+
+func (s *Service) ensureVideoSidecars(creatorTitle, channelTitle string, post floatplane.BlogPost, video floatplane.VideoAttachment, released time.Time) error {
+	thumbnailURL := ""
+	if post.Thumbnail != nil {
+		thumbnailURL = post.Thumbnail.Path
+	}
+	if _, _, err := library.SaveThumbnail(s.client.GetMedia, s.cfg.DownloadDir, creatorTitle, channelTitle, post.Title, video.Title, video.ID, thumbnailURL); err != nil {
+		log.Printf("  error saving thumbnail for %q: %v", post.Title, err)
+	}
+	if _, _, err := library.SaveNFO(s.cfg.DownloadDir, creatorTitle, channelTitle, post.Title, video.Title, video.ID, creatorTitle, post.Text, released); err != nil {
+		log.Printf("  error saving nfo for %q: %v", post.Title, err)
+	}
+
+	videoInfo, err := s.client.GetVideoInfo(video.ID)
+	if err != nil {
+		return err
+	}
+
+	subtitles := make([]library.SubtitleTrack, 0, len(videoInfo.TextTracks))
+	for _, track := range videoInfo.TextTracks {
+		if track.Kind != "captions" {
+			continue
+		}
+		subtitles = append(subtitles, library.SubtitleTrack{
+			URL:      track.Src,
+			Language: track.Language,
+		})
+	}
+	return library.SaveSubtitles(s.client.GetPublic, s.cfg.DownloadDir, creatorTitle, channelTitle, post.Title, video.Title, video.ID, subtitles)
+}
+
+func allVideoFilesExist(downloadDir, creatorTitle, channelTitle, postTitle string, attachments []floatplane.VideoAttachment) bool {
+	for _, video := range attachments {
+		if _, exists := library.VideoExists(downloadDir, creatorTitle, channelTitle, postTitle, video.Title, video.ID); !exists {
+			return false
+		}
+	}
+	return true
 }
 
 func parseReleaseDate(value string) (time.Time, error) {

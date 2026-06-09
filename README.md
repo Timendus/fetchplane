@@ -1,6 +1,6 @@
 # Fetchplane
 
-Small Floatplane downloader for personal use in a Docker container. It logs in through Floatplane's OAuth device flow, scans subscribed creators on a schedule, and stores video files plus a small local state file.
+Small Floatplane downloader for personal use in a Docker container. It logs in through Floatplane's OAuth device flow, scans subscribed creators on a schedule, and stores video files plus a small local session file.
 
 ## What It Does
 
@@ -8,7 +8,7 @@ Small Floatplane downloader for personal use in a Docker container. It logs in t
 - Polls your subscriptions for creator posts with video attachments
 - Downloads videos into per-creator and per-subchannel folders
 - Saves thumbnails and `.nfo` files next to downloaded videos
-- Persists refresh tokens and download state so later runs are incremental
+- Persists OAuth session tokens so later runs do not need a fresh device login
 
 ## Configuration
 
@@ -19,9 +19,10 @@ Use [.env.example](/home/tim/Workspace/fetchplane/.env.example) as a starting po
 - `FP_OAUTH_CLIENT_ID`: required; must be a Floatplane-issued OAuth client ID
 - `FP_OAUTH_SCOPE`: optional; defaults to `openid videos:watch account:read`
 - `FP_DOWNLOAD_DIR`: optional; defaults to `downloads`
-- `FP_STATE_FILE`: optional; defaults to `$FP_DOWNLOAD_DIR/.fetchplane-state.json`
+- `FP_SESSION_FILE`: optional; defaults to `$FP_DOWNLOAD_DIR/.fetchplane-session.json`
 - `FP_POLL_INTERVAL`: optional; seconds between runs in daemon mode; defaults to `300`
-- `FP_SINCE`: optional; only consider posts released after this date
+- `FP_MAX_DAYS_TO_DOWNLOAD`: optional; only download missing videos from the last N days; defaults to `7`
+- `FP_REMOVE_OLDER_THAN_DAYS`: optional; delete managed videos older than N days
 
 ## Docker Usage
 
@@ -69,24 +70,20 @@ go run ./cmd/fetchplane -daemon
 
 The current implementation is intentionally simple:
 
-1. Start up, load config, and load the local JSON state file.
+1. Start up, load config, and load the local OAuth session file.
 2. Reuse a saved OAuth access token if still fresh.
 3. Otherwise refresh with the saved refresh token.
 4. Otherwise start a new OAuth device-login flow and persist the new tokens immediately.
 5. Call `GET /api/v3/user/subscriptions` to enumerate subscribed creators.
 6. For each creator, resolve creator metadata through `GET /api/v3/creator/info`.
-7. Page through `GET /api/v3/content/creator` and extract video attachment IDs from posts.
-8. For each attachment, call `GET /api/v3/delivery/info?scenario=download`.
-9. Download the selected delivery URL with authenticated requests.
-10. Save the video, thumbnail, `.nfo`, and attachment state.
+7. Prepare creator and channel folders plus artwork before scanning individual posts.
+8. Page through `GET /api/v3/content/creator` and extract video attachment IDs from posts.
+9. Treat the video file on disk as the source of truth:
+   missing videos may be downloaded if they are within the configured download window
+   existing videos have their sidecars repaired if needed
+10. Optionally remove managed videos older than the configured retention window.
 
-The state file currently tracks:
-
-- OAuth tokens and expiry
-- latest processed release timestamp per creator
-- seen attachment IDs
-
-That is enough to keep later runs incremental without needing a database.
+The session file only tracks OAuth tokens and expiry. Downloaded videos on disk are the canonical sync state.
 
 ## Notes For Developers
 

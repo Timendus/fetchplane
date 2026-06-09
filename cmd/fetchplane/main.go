@@ -24,13 +24,16 @@ func main() {
 		log.Fatalf("config error: %v", err)
 	}
 
-	if !cfg.Since.IsZero() {
-		log.Printf("only downloading videos released after %s", cfg.Since.Format(time.RFC3339))
+	if cfg.MaxDaysToDownload > 0 {
+		log.Printf("only downloading missing videos from the last %d day(s)", cfg.MaxDaysToDownload)
+	}
+	if cfg.RemoveOlderThanDays > 0 {
+		log.Printf("removing managed videos older than %d day(s)", cfg.RemoveOlderThanDays)
 	}
 
-	st, err := state.Load(cfg.StateFile)
+	st, err := state.Load(cfg.SessionFile)
 	if err != nil {
-		log.Fatalf("state error: %v", err)
+		log.Fatalf("session error: %v", err)
 	}
 
 	client := floatplane.NewClient()
@@ -45,8 +48,8 @@ func main() {
 	if err := service.Run(); err != nil {
 		log.Fatalf("error: %v", err)
 	}
-	if err := st.Save(cfg.StateFile); err != nil {
-		log.Fatalf("state save error: %v", err)
+	if err := st.Save(cfg.SessionFile); err != nil {
+		log.Fatalf("session save error: %v", err)
 	}
 }
 
@@ -63,8 +66,8 @@ func runDaemon(cfg *config.Config, service *floatplanesync.Service, st *state.St
 		if err := service.Run(); err != nil {
 			log.Printf("run error: %v", err)
 		}
-		if err := st.Save(cfg.StateFile); err != nil {
-			log.Printf("state save error: %v", err)
+		if err := st.Save(cfg.SessionFile); err != nil {
+			log.Printf("session save error: %v", err)
 		}
 
 		select {

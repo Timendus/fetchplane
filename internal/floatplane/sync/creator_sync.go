@@ -2,6 +2,7 @@ package sync
 
 import (
 	"log"
+	"time"
 
 	"github.com/Timendus/fetchplane/internal/config"
 	"github.com/Timendus/fetchplane/internal/floatplane"
@@ -12,6 +13,7 @@ type Service struct {
 	cfg    *config.Config
 	client *floatplane.Client
 	state  *state.State
+	latest map[string]time.Time
 }
 
 type preparedCreator struct {
@@ -24,6 +26,7 @@ func New(cfg *config.Config, client *floatplane.Client, st *state.State) *Servic
 		cfg:    cfg,
 		client: client,
 		state:  st,
+		latest: map[string]time.Time{},
 	}
 }
 
@@ -57,10 +60,25 @@ func (s *Service) Run() error {
 			continue
 		}
 
+		if err := s.removeExpiredVideos(prepared); err != nil {
+			log.Printf("  error cleaning %s: %v", creator.Title, err)
+		}
+
 		if err := s.processCreator(prepared); err != nil {
 			log.Printf("  error processing %s: %v", creator.Title, err)
 		}
 	}
 
 	return nil
+}
+
+func (s *Service) latestReleaseTime(creatorID string) time.Time {
+	return s.latest[creatorID]
+}
+
+func (s *Service) rememberLatestRelease(creatorID string, released time.Time) {
+	if !released.After(s.latest[creatorID]) {
+		return
+	}
+	s.latest[creatorID] = released
 }

@@ -5,25 +5,26 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"time"
 )
 
 type Config struct {
-	OAuthClientID string
-	OAuthScope    string
-	DownloadDir   string
-	StateFile     string
-	PollInterval  int       // seconds
-	Since         time.Time // zero value means no cutoff
+	OAuthClientID       string
+	OAuthScope          string
+	DownloadDir         string
+	SessionFile         string
+	PollInterval        int
+	MaxDaysToDownload   int
+	RemoveOlderThanDays int
 }
 
 func Load() (*Config, error) {
 	c := &Config{
-		OAuthClientID: os.Getenv("FP_OAUTH_CLIENT_ID"),
-		OAuthScope:    os.Getenv("FP_OAUTH_SCOPE"),
-		DownloadDir:   os.Getenv("FP_DOWNLOAD_DIR"),
-		StateFile:     os.Getenv("FP_STATE_FILE"),
-		PollInterval:  300,
+		OAuthClientID:     os.Getenv("FP_OAUTH_CLIENT_ID"),
+		OAuthScope:        os.Getenv("FP_OAUTH_SCOPE"),
+		DownloadDir:       os.Getenv("FP_DOWNLOAD_DIR"),
+		SessionFile:       os.Getenv("FP_SESSION_FILE"),
+		PollInterval:      300,
+		MaxDaysToDownload: 7,
 	}
 
 	if c.OAuthClientID == "" {
@@ -35,8 +36,8 @@ func Load() (*Config, error) {
 	if c.DownloadDir == "" {
 		c.DownloadDir = "downloads"
 	}
-	if c.StateFile == "" {
-		c.StateFile = filepath.Join(c.DownloadDir, ".fetchplane-state.json")
+	if c.SessionFile == "" {
+		c.SessionFile = filepath.Join(c.DownloadDir, ".fetchplane-session.json")
 	}
 
 	if s := os.Getenv("FP_POLL_INTERVAL"); s != "" {
@@ -47,16 +48,24 @@ func Load() (*Config, error) {
 		c.PollInterval = v
 	}
 
-	if s := os.Getenv("FP_SINCE"); s != "" {
-		t, err := time.Parse(time.RFC3339, s)
-		if err != nil {
-			// Also accept plain date
-			t, err = time.Parse("2006-01-02", s)
-			if err != nil {
-				return nil, fmt.Errorf("FP_SINCE must be RFC3339 (2006-01-02T15:04:05Z) or a date (2006-01-02)")
-			}
+	if s := os.Getenv("FP_MAX_DAYS_TO_DOWNLOAD"); s != "" {
+		v, err := strconv.Atoi(s)
+		if err != nil || v <= 0 {
+			return nil, fmt.Errorf("FP_MAX_DAYS_TO_DOWNLOAD must be a positive integer")
 		}
-		c.Since = t
+		c.MaxDaysToDownload = v
+	}
+
+	if s := os.Getenv("FP_REMOVE_OLDER_THAN_DAYS"); s != "" {
+		v, err := strconv.Atoi(s)
+		if err != nil || v <= 0 {
+			return nil, fmt.Errorf("FP_REMOVE_OLDER_THAN_DAYS must be a positive integer")
+		}
+		c.RemoveOlderThanDays = v
+	}
+
+	if c.MaxDaysToDownload > 0 && c.RemoveOlderThanDays > 0 && c.MaxDaysToDownload > c.RemoveOlderThanDays {
+		return nil, fmt.Errorf("FP_MAX_DAYS_TO_DOWNLOAD cannot be greater than FP_REMOVE_OLDER_THAN_DAYS")
 	}
 
 	return c, nil
