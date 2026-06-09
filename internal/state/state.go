@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/Timendus/fetchplane/internal/api"
+	"github.com/Timendus/fetchplane/internal/floatplane"
 )
 
 type State struct {
@@ -84,7 +84,7 @@ func (s *State) HasAttachment(attachmentID string) bool {
 	return ok
 }
 
-func (s *State) HasAllAttachments(attachments []api.VideoAttachment) bool {
+func (s *State) HasAllAttachments(attachments []floatplane.VideoAttachment) bool {
 	for _, attachment := range attachments {
 		if !s.HasAttachment(attachment.ID) {
 			return false
