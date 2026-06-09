@@ -3,9 +3,6 @@ package main
 import (
 	"flag"
 	"log"
-	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	"github.com/Timendus/fetchplane/internal/config"
@@ -58,10 +55,6 @@ func runDaemon(cfg *config.Config, service *floatplanesync.Service, st *state.St
 	ticker := time.NewTicker(time.Duration(cfg.PollInterval) * time.Second)
 	defer ticker.Stop()
 
-	signals := make(chan os.Signal, 1)
-	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
-	defer signal.Stop(signals)
-
 	for {
 		if err := service.Run(); err != nil {
 			log.Printf("run error: %v", err)
@@ -70,11 +63,6 @@ func runDaemon(cfg *config.Config, service *floatplanesync.Service, st *state.St
 			log.Printf("session save error: %v", err)
 		}
 
-		select {
-		case <-ticker.C:
-		case sig := <-signals:
-			log.Printf("received %s, shutting down", sig)
-			return
-		}
+		<-ticker.C
 	}
 }
