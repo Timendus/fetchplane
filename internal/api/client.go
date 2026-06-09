@@ -315,6 +315,59 @@ func (c *Client) GetCreatorInfo(creatorID string) (*CreatorInfo, error) {
 	return &creator, nil
 }
 
+func (c *Client) GetNamedCreator(urlName string) (*CreatorInfo, error) {
+	if urlName == "" {
+		return nil, fmt.Errorf("creator urlname is empty")
+	}
+
+	u, _ := url.Parse(baseURL + "/api/v3/creator/named")
+	q := u.Query()
+	q.Set("creatorURL", urlName)
+	u.RawQuery = q.Encode()
+
+	resp, err := c.get(u.String())
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		raw, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("creator named failed (%d): %s", resp.StatusCode, string(raw))
+	}
+
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("creator named read error: %w", err)
+	}
+
+	var creators []CreatorInfo
+	if err := json.Unmarshal(raw, &creators); err == nil {
+		for _, creator := range creators {
+			if creator.ID == "" {
+				creator.ID = urlName
+			}
+			if creator.URLName == "" {
+				creator.URLName = urlName
+			}
+			return &creator, nil
+		}
+		return nil, fmt.Errorf("creator named returned no creators")
+	}
+
+	var creator CreatorInfo
+	if err := json.Unmarshal(raw, &creator); err != nil {
+		return nil, fmt.Errorf("creator named decode error: %w", err)
+	}
+	if creator.ID == "" {
+		creator.ID = urlName
+	}
+	if creator.URLName == "" {
+		creator.URLName = urlName
+	}
+	return &creator, nil
+}
+
 func (c *Client) GetVideoInfo(videoID string) (*VideoInfo, error) {
 	u, _ := url.Parse(baseURL + "/api/v3/content/video")
 	q := u.Query()

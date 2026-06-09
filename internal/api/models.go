@@ -34,9 +34,12 @@ type Subscription struct {
 }
 
 type CreatorInfo struct {
-	ID      string `json:"id"`
-	Title   string `json:"title"`
-	URLName string `json:"urlname"`
+	ID       string        `json:"id"`
+	Title    string        `json:"title"`
+	URLName  string        `json:"urlname"`
+	Cover    *ImageAsset   `json:"cover"`
+	Icon     *ImageAsset   `json:"icon"`
+	Channels []ChannelInfo `json:"channels"`
 }
 
 type BlogPost struct {
@@ -55,9 +58,20 @@ type Thumbnail struct {
 	Path string `json:"path"`
 }
 
+type ImageAsset struct {
+	Path string `json:"path"`
+}
+
 type ChannelRef struct {
 	ID    string
 	Title string
+}
+
+type ChannelInfo struct {
+	ID    string      `json:"id"`
+	Title string      `json:"title"`
+	Cover *ImageAsset `json:"cover"`
+	Icon  *ImageAsset `json:"icon"`
 }
 
 func (c *ChannelRef) UnmarshalJSON(data []byte) error {

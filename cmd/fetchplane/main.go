@@ -17,6 +17,11 @@ import (
 
 const pageSize = 20
 
+type preparedCreator struct {
+	Info     *api.CreatorInfo
+	Channels map[string]api.ChannelInfo
+}
+
 func main() {
 	daemon := flag.Bool("daemon", false, "run continuously, polling on FP_POLL_INTERVAL (default 300s)")
 	debug := flag.Bool("debug", false, "log HTTP requests and responses")
@@ -105,7 +110,13 @@ func run(cfg *config.Config, client *api.Client, st *state.State) error {
 		}
 		log.Printf("checking creator: %s", creator.Title)
 
-		if err := processCreator(cfg, client, st, creator.ID, creator.Title); err != nil {
+		prepared, err := prepareCreator(cfg, client, creator)
+		if err != nil {
+			log.Printf("  error preparing %s: %v", creator.Title, err)
+			continue
+		}
+
+		if err := processCreator(cfg, client, st, prepared); err != nil {
 			log.Printf("  error processing %s: %v", creator.Title, err)
 		}
 	}
@@ -207,12 +218,13 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
-func processCreator(cfg *config.Config, client *api.Client, st *state.State, creatorID, creatorTitle string) error {
+func processCreator(cfg *config.Config, client *api.Client, st *state.State, prepared *preparedCreator) error {
+	creator := prepared.Info
 	fetchAfter := 0
-	incrementalCutoff := st.LatestReleaseTime(creatorID)
+	incrementalCutoff := st.LatestReleaseTime(creator.ID)
 
 	for {
-		posts, err := client.GetBlogPosts(creatorID, pageSize, fetchAfter)
+		posts, err := client.GetBlogPosts(creator.ID, pageSize, fetchAfter)
 		if err != nil {
 			return err
 		}
@@ -223,17 +235,14 @@ func processCreator(cfg *config.Config, client *api.Client, st *state.State, cre
 		done := true
 		for _, post := range posts {
 			attachments := post.Attachments()
-			channelTitle := creatorTitle
-			if post.Channel.Title != "" {
-				channelTitle = post.Channel.Title
-			}
+			channelTitle := resolveChannelTitle(creator.Title, post.Channel, prepared.Channels)
 
 			released, err := parseReleaseDate(post.ReleaseDate)
 			if err != nil {
 				log.Printf("  could not parse release date %q for %q, skipping", post.ReleaseDate, post.Title)
 				continue
 			}
-			st.RememberLatestRelease(creatorID, released)
+			st.RememberLatestRelease(creator.ID, released)
 
 			// Keep scanning the current page even after hitting older posts because
 			// the feed is not guaranteed to be perfectly ordered.
@@ -258,8 +267,8 @@ func processCreator(cfg *config.Config, client *api.Client, st *state.State, cre
 					continue
 				}
 
-				if filename, exists := downloader.VideoExists(cfg.DownloadDir, creatorTitle, channelTitle, post.Title, video.Title, video.ID); exists {
-					st.RememberAttachment(creatorID, post.ID, video.ID, filename, released)
+				if filename, exists := downloader.VideoExists(cfg.DownloadDir, creator.Title, channelTitle, post.Title, video.Title, video.ID); exists {
+					st.RememberAttachment(creator.ID, post.ID, video.ID, filename, released)
 					log.Printf("  skip delivery lookup (exists): %s", filename)
 					continue
 				}
@@ -268,10 +277,10 @@ func processCreator(cfg *config.Config, client *api.Client, st *state.State, cre
 				if post.Thumbnail != nil {
 					thumbnailURL = post.Thumbnail.Path
 				}
-				if _, _, err := downloader.SaveThumbnail(client.GetMedia, cfg.DownloadDir, creatorTitle, channelTitle, post.Title, video.Title, video.ID, thumbnailURL); err != nil {
+				if _, _, err := downloader.SaveThumbnail(client.GetMedia, cfg.DownloadDir, creator.Title, channelTitle, post.Title, video.Title, video.ID, thumbnailURL); err != nil {
 					log.Printf("  error saving thumbnail for %q: %v", post.Title, err)
 				}
-				if _, _, err := downloader.SaveNFO(cfg.DownloadDir, creatorTitle, channelTitle, post.Title, video.Title, video.ID, creatorTitle, post.Text, released); err != nil {
+				if _, _, err := downloader.SaveNFO(cfg.DownloadDir, creator.Title, channelTitle, post.Title, video.Title, video.ID, creator.Title, post.Text, released); err != nil {
 					log.Printf("  error saving nfo for %q: %v", post.Title, err)
 				}
 
@@ -289,7 +298,7 @@ func processCreator(cfg *config.Config, client *api.Client, st *state.State, cre
 							Language: track.Language,
 						})
 					}
-					if err := downloader.SaveSubtitles(client.GetPublic, cfg.DownloadDir, creatorTitle, channelTitle, post.Title, video.Title, video.ID, subtitles); err != nil {
+					if err := downloader.SaveSubtitles(client.GetPublic, cfg.DownloadDir, creator.Title, channelTitle, post.Title, video.Title, video.ID, subtitles); err != nil {
 						log.Printf("  error saving subtitles for %q: %v", post.Title, err)
 					}
 				}
@@ -300,12 +309,12 @@ func processCreator(cfg *config.Config, client *api.Client, st *state.State, cre
 					continue
 				}
 
-				filename, _, err := downloader.Download(client.GetMedia, cfg.DownloadDir, creatorTitle, channelTitle, post.Title, video.Title, video.ID, dlURL)
+				filename, _, err := downloader.Download(client.GetMedia, cfg.DownloadDir, creator.Title, channelTitle, post.Title, video.Title, video.ID, dlURL)
 				if err != nil {
 					log.Printf("  error downloading %q: %v", post.Title, err)
 					continue
 				}
-				st.RememberAttachment(creatorID, post.ID, video.ID, filename, released)
+				st.RememberAttachment(creator.ID, post.ID, video.ID, filename, released)
 			}
 		}
 
@@ -323,4 +332,86 @@ func parseReleaseDate(value string) (time.Time, error) {
 		return t, nil
 	}
 	return time.Parse("2006-01-02T15:04:05.000Z", value)
+}
+
+func prepareCreator(cfg *config.Config, client *api.Client, creator *api.CreatorInfo) (*preparedCreator, error) {
+	prepared := &preparedCreator{
+		Info:     creator,
+		Channels: map[string]api.ChannelInfo{},
+	}
+
+	if err := prepareCreatorLibrary(cfg, client, creator); err != nil {
+		return nil, err
+	}
+
+	if creator.URLName == "" {
+		return prepared, nil
+	}
+
+	namedCreator, err := client.GetNamedCreator(creator.URLName)
+	if err != nil {
+		log.Printf("  named creator lookup failed for %s: %v", creator.Title, err)
+		return prepared, nil
+	}
+
+	for _, channel := range namedCreator.Channels {
+		if channel.ID != "" {
+			prepared.Channels[channel.ID] = channel
+		}
+		if err := prepareChannelLibrary(cfg, client, creator.Title, channel); err != nil {
+			log.Printf("  error preparing channel %s: %v", channel.Title, err)
+		}
+	}
+
+	return prepared, nil
+}
+
+func prepareCreatorLibrary(cfg *config.Config, client *api.Client, creator *api.CreatorInfo) error {
+	if creator == nil {
+		return nil
+	}
+	if _, err := downloader.EnsureLibraryDir(cfg.DownloadDir, creator.Title, ""); err != nil {
+		return err
+	}
+	if creator.Cover != nil && creator.Cover.Path != "" {
+		if _, _, err := downloader.SaveLibraryArtwork(client.GetMedia, cfg.DownloadDir, creator.Title, "", "fanart", creator.Cover.Path); err != nil {
+			log.Printf("  error saving creator cover for %s: %v", creator.Title, err)
+		}
+	}
+	if creator.Icon != nil && creator.Icon.Path != "" {
+		if _, _, err := downloader.SaveLibraryArtwork(client.GetMedia, cfg.DownloadDir, creator.Title, "", "folder", creator.Icon.Path); err != nil {
+			log.Printf("  error saving creator icon for %s: %v", creator.Title, err)
+		}
+	}
+	return nil
+}
+
+func prepareChannelLibrary(cfg *config.Config, client *api.Client, creatorTitle string, channel api.ChannelInfo) error {
+	if channel.Title == "" || channel.Title == creatorTitle {
+		return nil
+	}
+	if _, err := downloader.EnsureLibraryDir(cfg.DownloadDir, creatorTitle, channel.Title); err != nil {
+		return err
+	}
+	if channel.Cover != nil && channel.Cover.Path != "" {
+		if _, _, err := downloader.SaveLibraryArtwork(client.GetMedia, cfg.DownloadDir, creatorTitle, channel.Title, "fanart", channel.Cover.Path); err != nil {
+			log.Printf("  error saving channel cover for %s: %v", channel.Title, err)
+		}
+	}
+	if channel.Icon != nil && channel.Icon.Path != "" {
+		if _, _, err := downloader.SaveLibraryArtwork(client.GetMedia, cfg.DownloadDir, creatorTitle, channel.Title, "folder", channel.Icon.Path); err != nil {
+			log.Printf("  error saving channel poster for %s: %v", channel.Title, err)
+		}
+	}
+	return nil
+}
+
+func resolveChannelTitle(creatorTitle string, channel api.ChannelRef, prepared map[string]api.ChannelInfo) string {
+	if info, ok := prepared[channel.ID]; ok && info.Title != "" {
+		return info.Title
+	}
+	if channel.Title != "" {
+		return channel.Title
+	}
+	return creatorTitle
 }
