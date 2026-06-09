@@ -121,6 +121,39 @@ func (c *Client) GetMedia(rawURL string) (*http.Response, error) {
 	return c.get(rawURL)
 }
 
+func (c *Client) GetPublic(rawURL string) (*http.Response, error) {
+	if strings.HasPrefix(rawURL, "/") {
+		rawURL = baseURL + rawURL
+	}
+	req, err := http.NewRequest(http.MethodGet, rawURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", userAgent)
+	start := time.Now()
+	if c.debug {
+		log.Printf("http request: %s %s", req.Method, req.URL.String())
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		if c.debug {
+			log.Printf("http error: %s %s (%s): %v", req.Method, req.URL.String(), time.Since(start).Round(time.Millisecond), err)
+		}
+		return nil, err
+	}
+	if c.debug {
+		log.Printf(
+			"http response: %s %s -> %d (%s, %d bytes)",
+			req.Method,
+			req.URL.String(),
+			resp.StatusCode,
+			time.Since(start).Round(time.Millisecond),
+			resp.ContentLength,
+		)
+	}
+	return resp, nil
+}
+
 func (c *Client) postForm(rawURL string, values url.Values) (*http.Response, error) {
 	body := strings.NewReader(values.Encode())
 	req, err := http.NewRequest(http.MethodPost, rawURL, body)
@@ -280,6 +313,30 @@ func (c *Client) GetCreatorInfo(creatorID string) (*CreatorInfo, error) {
 		creator.ID = creatorID
 	}
 	return &creator, nil
+}
+
+func (c *Client) GetVideoInfo(videoID string) (*VideoInfo, error) {
+	u, _ := url.Parse(baseURL + "/api/v3/content/video")
+	q := u.Query()
+	q.Set("id", videoID)
+	u.RawQuery = q.Encode()
+
+	resp, err := c.get(u.String())
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		raw, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("video info failed (%d): %s", resp.StatusCode, string(raw))
+	}
+
+	var video VideoInfo
+	if err := json.NewDecoder(resp.Body).Decode(&video); err != nil {
+		return nil, fmt.Errorf("video info decode error: %w", err)
+	}
+	return &video, nil
 }
 
 func (c *Client) GetBlogPosts(creatorID string, limit, fetchAfter int) ([]BlogPost, error) {

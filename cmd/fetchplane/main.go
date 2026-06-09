@@ -275,6 +275,25 @@ func processCreator(cfg *config.Config, client *api.Client, st *state.State, cre
 					log.Printf("  error saving nfo for %q: %v", post.Title, err)
 				}
 
+				videoInfo, err := client.GetVideoInfo(video.ID)
+				if err != nil {
+					log.Printf("  error getting video info for %q: %v", post.Title, err)
+				} else {
+					subtitles := make([]downloader.SubtitleTrack, 0, len(videoInfo.TextTracks))
+					for _, track := range videoInfo.TextTracks {
+						if track.Kind != "captions" {
+							continue
+						}
+						subtitles = append(subtitles, downloader.SubtitleTrack{
+							URL:      track.Src,
+							Language: track.Language,
+						})
+					}
+					if err := downloader.SaveSubtitles(client.GetPublic, cfg.DownloadDir, creatorTitle, channelTitle, post.Title, video.Title, video.ID, subtitles); err != nil {
+						log.Printf("  error saving subtitles for %q: %v", post.Title, err)
+					}
+				}
+
 				dlURL, err := client.GetDeliveryURL(video.ID)
 				if err != nil {
 					log.Printf("  error getting delivery URL for %q: %v", post.Title, err)

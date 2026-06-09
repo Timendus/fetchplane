@@ -84,6 +84,20 @@ type VideoAttachment struct {
 	Title string
 }
 
+type VideoInfo struct {
+	ID         string      `json:"id"`
+	GUID       string      `json:"guid"`
+	Title      string      `json:"title"`
+	TextTracks []TextTrack `json:"textTracks"`
+}
+
+type TextTrack struct {
+	Src      string `json:"src"`
+	Language string `json:"language"`
+	Kind     string `json:"kind"`
+	Label    string `json:"label"`
+}
+
 type VideoAttachmentRef struct {
 	ID    string
 	Title string
