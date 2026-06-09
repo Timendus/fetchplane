@@ -52,8 +52,7 @@ func main() {
 
 func runDaemon(cfg *config.Config, service *floatplanesync.Service, st *state.State) {
 	log.Printf("daemon mode - polling every %ds", cfg.PollInterval)
-	ticker := time.NewTicker(time.Duration(cfg.PollInterval) * time.Second)
-	defer ticker.Stop()
+	interval := time.Duration(cfg.PollInterval) * time.Second
 
 	for {
 		if err := service.Run(); err != nil {
@@ -63,6 +62,6 @@ func runDaemon(cfg *config.Config, service *floatplanesync.Service, st *state.St
 			log.Printf("session save error: %v", err)
 		}
 
-		<-ticker.C
+		time.Sleep(interval)
 	}
 }
