@@ -24,44 +24,44 @@ jobs:
         go-version: [ '1.26.x' ]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ matrix.go-version }}
       - name: Build the application
         run: make
 
       - name: Upload Linux binaries
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: fetchplane-linux
           path: ./dist/linux/*
       - name: Upload Windows binary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: fetchplane-windows
           path: ./dist/windows/*
       - name: Upload MacOS binaries
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: fetchplane-macos
           path: ./dist/macos/*
       - name: Upload Docker image
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: fetchplane-docker-image
           path: ./dist/docker/*
       
       - name: Collect all build artifacts for release
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         if: github.event.inputs.tag != ''
         with:
           pattern: fetchplane-*
           merge-multiple: true
           path: release_assets
       - name: Create release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         if: github.event.inputs.tag != ''
         with:
           draft: true
