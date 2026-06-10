@@ -12,11 +12,13 @@ import (
 const (
 	defaultPollInterval      = 600
 	defaultMaxDaysToDownload = 7
-	defaultStoragePath       = "/data"
+	defaultLibraryPath       = "/downloads"
+	defaultConfigPath        = "/config"
 )
 
 type Config struct {
-	StoragePath         string `yaml:"-"`
+	LibraryPath         string `yaml:"-"`
+	ConfigPath          string `yaml:"-"`
 	ConfigFile          string `yaml:"-"`
 	DownloadDir         string `yaml:"-"`
 	SessionFile         string `yaml:"-"`
@@ -28,26 +30,32 @@ type Config struct {
 }
 
 func Load() (*Config, error) {
-	storagePath := os.Getenv("STORAGE_PATH")
-	if storagePath == "" {
-		storagePath = defaultStoragePath
+	libraryPath := os.Getenv("LIBRARY_PATH")
+	if libraryPath == "" {
+		libraryPath = defaultLibraryPath
+	}
+
+	configPath := os.Getenv("CONFIG_PATH")
+	if configPath == "" {
+		configPath = defaultConfigPath
 	}
 
 	cfg := &Config{
-		StoragePath:       storagePath,
-		ConfigFile:        filepath.Join(storagePath, "config.yaml"),
-		DownloadDir:       filepath.Join(storagePath, "downloads"),
-		SessionFile:       filepath.Join(storagePath, "session.json"),
+		LibraryPath:       libraryPath,
+		ConfigPath:        configPath,
+		ConfigFile:        filepath.Join(configPath, "config.yaml"),
+		DownloadDir:       libraryPath,
+		SessionFile:       filepath.Join(configPath, "session.json"),
 		OAuthScope:        "openid videos:watch account:read",
 		PollInterval:      defaultPollInterval,
 		MaxDaysToDownload: defaultMaxDaysToDownload,
 	}
 
-	if err := os.MkdirAll(cfg.StoragePath, 0755); err != nil {
-		return nil, fmt.Errorf("create storage path: %w", err)
+	if err := os.MkdirAll(cfg.ConfigPath, 0755); err != nil {
+		return nil, fmt.Errorf("create config path: %w", err)
 	}
 	if err := os.MkdirAll(cfg.DownloadDir, 0755); err != nil {
-		return nil, fmt.Errorf("create downloads path: %w", err)
+		return nil, fmt.Errorf("create library path: %w", err)
 	}
 
 	if err := ensureConfigFile(cfg); err != nil {

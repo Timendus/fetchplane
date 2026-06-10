@@ -14,11 +14,12 @@ RUN apk add --no-cache ca-certificates
 
 WORKDIR /app
 
-ENV STORAGE_PATH=/data
+ENV LIBRARY_PATH=/downloads
+ENV CONFIG_PATH=/config
 
 COPY --from=build /out/fetchplane /usr/local/bin/fetchplane
 
-VOLUME ["/data"]
+VOLUME ["/downloads", "/config"]
 
 ENTRYPOINT ["/usr/local/bin/fetchplane"]
 CMD ["-daemon"]

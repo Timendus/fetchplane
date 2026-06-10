@@ -15,4 +15,4 @@ docker-build:
 	@docker save $(IMAGE) | gzip > dist/docker/fetchplane.tar.gz
 
 run:
-	@STORAGE_PATH=storage go run ./cmd/fetchplane
+	@LIBRARY_PATH=storage/downloads CONFIG_PATH=storage/config go run ./cmd/fetchplane

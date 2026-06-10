@@ -16,14 +16,16 @@ desire.
 
 ## Configuration
 
-The app uses a single storage root, controlled by the environment variable
-`STORAGE_PATH`. This variable defaults to `/data`.
+The app uses two paths:
+
+- `LIBRARY_PATH`: where downloaded media is stored. Defaults to `/downloads`.
+- `CONFIG_PATH`: where `config.yaml` and `session.json` live. Defaults to `/config`.
 
 At startup it ensures these paths exist:
 
-- `STORAGE_PATH/downloads/`
-- `STORAGE_PATH/session.json`
-- `STORAGE_PATH/config.yaml`
+- `LIBRARY_PATH/`
+- `CONFIG_PATH/session.json`
+- `CONFIG_PATH/config.yaml`
 
 If `config.yaml` does not exist yet, the app creates it with defaults and
 comments. You then edit that file to set at least your Floatplane OAuth client
@@ -49,12 +51,13 @@ Run it:
 
 ```sh
 docker run --rm -it \
-  -v "$PWD/data:/data" \
+  -v "$PWD/downloads:/downloads" \
+  -v "$PWD/config:/config" \
   fetchplane:latest
 ```
 
-On first run, the container will create `/data/config.yaml`,
-`/data/session.json`, and `/data/downloads/`. Edit `/data/config.yaml` and set
+On first run, the container will create `/config/config.yaml`,
+`/config/session.json`, and `/downloads/`. Edit `/config/config.yaml` and set
 `oauthClientId`, then start the container again.
 
 The image defaults to daemon mode. On first authenticated run it will print a
@@ -65,7 +68,8 @@ For a one-shot run instead of daemon mode:
 
 ```sh
 docker run --rm -it \
-  -v "$PWD/data:/data" \
+  -v "$PWD/downloads:/downloads" \
+  -v "$PWD/config:/config" \
   --entrypoint /usr/local/bin/fetchplane \
   fetchplane:latest
 ```
@@ -73,7 +77,7 @@ docker run --rm -it \
 ## Local Usage
 
 ```sh
-STORAGE_PATH=storage go run ./cmd/fetchplane
+LIBRARY_PATH=storage/downloads CONFIG_PATH=storage/config go run ./cmd/fetchplane
 ```
 
 Add `-daemon` to keep polling. Add `-debug` to see what requests are being done.
@@ -82,8 +86,8 @@ Add `-daemon` to keep polling. Add `-debug` to see what requests are being done.
 
 The current implementation is intentionally simple:
 
-1. Start up, bootstrap the storage root, load `config.yaml`, and load the local
-   OAuth session file.
+1. Start up, bootstrap the library/config paths, load `config.yaml`, and load
+   the local OAuth session file.
 2. Reuse a saved OAuth access token if still fresh.
 3. Otherwise refresh with the saved refresh token.
 4. Otherwise start a new OAuth device-login flow and persist the new tokens
