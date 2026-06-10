@@ -1,4 +1,4 @@
-IMAGE ?= fetchplane:latest
+IMAGE ?= timendus/fetchplane:latest
 
 all: build docker-build
 
