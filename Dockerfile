@@ -1,14 +1,14 @@
-FROM golang:1.26 AS build
+FROM golang:latest AS build
 
 WORKDIR /src
 
-COPY go.mod ./
+COPY go.* ./
 COPY cmd ./cmd
 COPY internal ./internal
 
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /out/fetchplane ./cmd/fetchplane
 
-FROM alpine:3.22
+FROM alpine:latest
 
 RUN apk add --no-cache ca-certificates
 
