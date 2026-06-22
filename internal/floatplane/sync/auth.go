@@ -118,8 +118,14 @@ func (s *Service) saveToken(token *floatplane.OAuthToken) error {
 	if expiresIn <= 0 {
 		expiresIn = 1800
 	}
+
+	refreshToken := token.RefreshToken
+	if refreshToken == "" {
+		refreshToken = s.state.RefreshToken()
+	}
+
 	expiresAt := time.Now().Add(time.Duration(expiresIn) * time.Second)
-	s.state.SetAuth(s.cfg.OAuthClientID, token.TokenType, token.Scope, token.AccessToken, token.RefreshToken, expiresAt)
+	s.state.SetAuth(s.cfg.OAuthClientID, token.TokenType, token.Scope, token.AccessToken, refreshToken, expiresAt)
 	s.client.SetAccessToken(token.AccessToken)
 	if err := s.state.Save(s.cfg.SessionFile); err != nil {
 		return fmt.Errorf("session save error after auth: %w", err)
