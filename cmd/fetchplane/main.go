@@ -38,28 +38,29 @@ func main() {
 	service := floatplanesync.New(cfg, client, st)
 
 	if *daemon {
-		runDaemon(cfg, service, st)
+		if err := runDaemon(cfg, service, st); err != nil {
+			log.Fatalf("error: %v", err)
+		}
 		return
 	}
 
 	if err := service.Run(); err != nil {
 		log.Fatalf("error: %v", err)
 	}
-	if err := st.Save(cfg.SessionFile); err != nil {
-		log.Fatalf("session save error: %v", err)
-	}
 }
 
-func runDaemon(cfg *config.Config, service *floatplanesync.Service, st *state.State) {
+func runDaemon(cfg *config.Config, service *floatplanesync.Service, st *state.State) error {
 	log.Printf("daemon mode - polling every %ds", cfg.PollInterval)
 	interval := time.Duration(cfg.PollInterval) * time.Second
 
 	for {
-		if err := service.Run(); err != nil {
+		err := service.Run()
+
+		if err != nil {
 			log.Printf("run error: %v", err)
-		}
-		if err := st.Save(cfg.SessionFile); err != nil {
-			log.Printf("session save error: %v", err)
+			if floatplanesync.IsAuthenticationError(err) {
+				return err
+			}
 		}
 
 		time.Sleep(interval)

@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"time"
@@ -8,10 +9,33 @@ import (
 	"github.com/Timendus/fetchplane/internal/floatplane"
 )
 
+type AuthenticationError struct {
+	err error
+}
+
+func (e *AuthenticationError) Error() string {
+	return e.err.Error()
+}
+
+func (e *AuthenticationError) Unwrap() error {
+	return e.err
+}
+
+func IsAuthenticationError(err error) bool {
+	var authErr *AuthenticationError
+	return errors.As(err, &authErr)
+}
+
+func newAuthenticationError(format string, args ...any) error {
+	return &AuthenticationError{err: fmt.Errorf(format, args...)}
+}
+
 func (s *Service) ensureAuthenticated() error {
 	if s.state.Auth.ClientID != "" && s.state.Auth.ClientID != s.cfg.OAuthClientID {
 		log.Printf("OAuth client ID changed from %s to %s; clearing stored tokens", s.state.Auth.ClientID, s.cfg.OAuthClientID)
-		s.state.ClearAuth()
+		if err := s.clearAuth(); err != nil {
+			return err
+		}
 	}
 
 	if accessToken := s.state.AccessToken(); accessToken != "" {
@@ -31,7 +55,9 @@ func (s *Service) ensureAuthenticated() error {
 			return nil
 		}
 		log.Printf("refresh failed, starting new device login: %v", err)
-		s.state.ClearAuth()
+		if err := s.clearAuth(); err != nil {
+			return err
+		}
 	}
 
 	deviceAuth, err := s.client.BeginDeviceAuthorization(s.cfg.OAuthClientID, s.cfg.OAuthScope)
@@ -72,11 +98,19 @@ func (s *Service) ensureAuthenticated() error {
 			interval += 5 * time.Second
 			continue
 		default:
-			return fmt.Errorf("device authorization failed: %s", oauthErr.ErrorDescription)
+			return newAuthenticationError("device authorization failed: %s", firstNonEmpty(oauthErr.ErrorDescription, oauthErr.Error))
 		}
 	}
 
-	return fmt.Errorf("device authorization timed out after %ds", deviceAuth.ExpiresIn)
+	return newAuthenticationError("device authorization timed out after %ds", deviceAuth.ExpiresIn)
+}
+
+func (s *Service) clearAuth() error {
+	s.state.ClearAuth()
+	if err := s.state.Save(s.cfg.SessionFile); err != nil {
+		return fmt.Errorf("session save error after clearing auth: %w", err)
+	}
+	return nil
 }
 
 func (s *Service) saveToken(token *floatplane.OAuthToken) error {
