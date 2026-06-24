@@ -1,4 +1,4 @@
-package floatplane
+package api
 
 import (
 	"encoding/json"

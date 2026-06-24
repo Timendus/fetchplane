@@ -101,6 +101,23 @@ func SaveSubtitles(fetch func(string) (*http.Response, error), downloadDir, crea
 	return nil
 }
 
+func SaveVideoSidecars(fetchMedia func(string) (*http.Response, error), fetchPublic func(string) (*http.Response, error), downloadDir, creatorName, channelName, postTitle, attachmentTitle, attachmentID, showTitle, description string, released time.Time, thumbnailURL string, tracks []SubtitleTrack) (string, error) {
+	thumbnailPath, _, err := SaveThumbnail(fetchMedia, downloadDir, creatorName, channelName, postTitle, attachmentTitle, attachmentID, thumbnailURL)
+	if err != nil {
+		return thumbnailPath, err
+	}
+
+	if _, _, err := SaveNFO(downloadDir, creatorName, channelName, postTitle, attachmentTitle, attachmentID, showTitle, description, released); err != nil {
+		return thumbnailPath, err
+	}
+
+	if err := SaveSubtitles(fetchPublic, downloadDir, creatorName, channelName, postTitle, attachmentTitle, attachmentID, tracks); err != nil {
+		return thumbnailPath, err
+	}
+
+	return thumbnailPath, nil
+}
+
 func cleanDescription(input string) string {
 	return strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(input, "\r\n", "\n"), "\r", "\n"))
 }

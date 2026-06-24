@@ -1,17 +1,19 @@
-package sync
+package floatplane
 
 import (
 	"log"
 	"time"
 
-	"github.com/Timendus/fetchplane/internal/floatplane"
+	"github.com/Timendus/fetchplane/internal/floatplane/api"
+	"github.com/Timendus/fetchplane/internal/floatplane/jobs"
+	"github.com/Timendus/fetchplane/internal/floatplane/runtime"
 	"github.com/Timendus/fetchplane/internal/library"
 )
 
-func (s *Service) prepareCreator(creator *floatplane.CreatorInfo) (*preparedCreator, error) {
+func (s *Service) prepareCreator(creator *api.CreatorInfo) (*preparedCreator, error) {
 	prepared := &preparedCreator{
 		Info:     creator,
-		Channels: map[string]floatplane.ChannelInfo{},
+		Channels: map[string]api.ChannelInfo{},
 	}
 
 	if err := s.prepareCreatorLibrary(creator); err != nil {
@@ -40,7 +42,7 @@ func (s *Service) prepareCreator(creator *floatplane.CreatorInfo) (*preparedCrea
 	return prepared, nil
 }
 
-func (s *Service) prepareCreatorLibrary(creator *floatplane.CreatorInfo) error {
+func (s *Service) prepareCreatorLibrary(creator *api.CreatorInfo) error {
 	if creator == nil {
 		return nil
 	}
@@ -60,7 +62,7 @@ func (s *Service) prepareCreatorLibrary(creator *floatplane.CreatorInfo) error {
 	return nil
 }
 
-func (s *Service) prepareChannelLibrary(creatorTitle string, channel floatplane.ChannelInfo) error {
+func (s *Service) prepareChannelLibrary(creatorTitle string, channel api.ChannelInfo) error {
 	if channel.Title == "" || channel.Title == creatorTitle {
 		return nil
 	}
@@ -80,36 +82,55 @@ func (s *Service) prepareChannelLibrary(creatorTitle string, channel floatplane.
 	return nil
 }
 
-func (s *Service) removeExpiredVideos(prepared *preparedCreator) error {
-	cutoff, ok := s.removalCutoff(time.Now())
-	if !ok {
+func (s *Service) buildPruneJobs(prepared *preparedCreator) []runtime.Job {
+	if s.cfg.RemoveOlderThanDays <= 0 {
 		return nil
 	}
+	cutoff := time.Now().AddDate(0, 0, -s.cfg.RemoveOlderThanDays)
 
 	rootDir, err := library.EnsureLibraryDir(s.cfg.DownloadDir, prepared.Info.Title, "")
 	if err != nil {
-		return err
+		log.Printf("  error preparing prune dir for %s: %v", prepared.Info.Title, err)
+		return nil
 	}
-	dirs := []string{rootDir}
+
+	result := []runtime.Job{jobs.PruneSpec{
+		Creator: prepared.Info.Title,
+		Channel: prepared.Info.Title,
+		Dir:     rootDir,
+		Cutoff:  cutoff,
+	}}
+
 	for _, channel := range prepared.Channels {
 		if channel.Title == "" || channel.Title == prepared.Info.Title {
 			continue
 		}
+
 		dir, err := library.EnsureLibraryDir(s.cfg.DownloadDir, prepared.Info.Title, channel.Title)
 		if err != nil {
-			return err
+			log.Printf("  error preparing prune dir for channel %s: %v", channel.Title, err)
+			continue
 		}
-		dirs = append(dirs, dir)
+
+		result = append(result, jobs.PruneSpec{
+			Creator: prepared.Info.Title,
+			Channel: channel.Title,
+			Dir:     dir,
+			Cutoff:  cutoff,
+		})
 	}
 
-	for _, dir := range dirs {
-		removed, err := library.RemoveOlderThan(dir, cutoff)
-		if err != nil {
-			return err
-		}
-		if removed > 0 {
-			log.Printf("  removed %d expired video(s) from %s", removed, dir)
-		}
+	return result
+}
+
+func (s *Service) RunPrune(creator, channel, dir string, cutoff time.Time) (int, error) {
+	removed, err := library.RemoveOlderThan(dir, cutoff)
+	if err != nil {
+		return 0, err
 	}
-	return nil
+
+	if removed > 0 {
+		log.Printf("removed %d expired video(s) from %s", removed, dir)
+	}
+	return removed, nil
 }

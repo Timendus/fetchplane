@@ -3,16 +3,15 @@ package main
 import (
 	"flag"
 	"log"
-	"time"
 
 	"github.com/Timendus/fetchplane/internal/config"
 	"github.com/Timendus/fetchplane/internal/floatplane"
-	floatplanesync "github.com/Timendus/fetchplane/internal/floatplane/sync"
+	"github.com/Timendus/fetchplane/internal/floatplane/api"
 	"github.com/Timendus/fetchplane/internal/state"
+	"github.com/Timendus/fetchplane/internal/webui"
 )
 
 func main() {
-	daemon := flag.Bool("daemon", false, "run continuously, polling on pollInterval from config.yaml (default 600s)")
 	debug := flag.Bool("debug", false, "log HTTP requests and responses")
 	flag.Parse()
 
@@ -33,36 +32,18 @@ func main() {
 		log.Fatalf("session error: %v", err)
 	}
 
-	client := floatplane.NewClient()
+	client := api.NewClient()
 	client.SetDebug(*debug)
-	service := floatplanesync.New(cfg, client, st)
+	service := floatplane.New(cfg, client, st)
+	service.Start()
 
-	if *daemon {
-		if err := runDaemon(cfg, service, st); err != nil {
-			log.Fatalf("error: %v", err)
-		}
-		return
+	server, err := webui.New(cfg, service)
+	if err != nil {
+		log.Fatalf("web server error: %v", err)
 	}
 
-	if err := service.Run(); err != nil {
-		log.Fatalf("error: %v", err)
-	}
-}
-
-func runDaemon(cfg *config.Config, service *floatplanesync.Service, st *state.State) error {
-	log.Printf("daemon mode - polling every %ds", cfg.PollInterval)
-	interval := time.Duration(cfg.PollInterval) * time.Second
-
-	for {
-		err := service.Run()
-
-		if err != nil {
-			log.Printf("run error: %v", err)
-			if floatplanesync.IsAuthenticationError(err) {
-				return err
-			}
-		}
-
-		time.Sleep(interval)
+	log.Printf("web UI listening on %s", cfg.Listen)
+	if err := server.ListenAndServe(); err != nil {
+		log.Fatalf("web server error: %v", err)
 	}
 }

@@ -14,6 +14,7 @@ const (
 	defaultMaxDaysToDownload = 7
 	defaultLibraryPath       = "/downloads"
 	defaultConfigPath        = "/config"
+	defaultListenAddress     = ":8080"
 )
 
 type Config struct {
@@ -22,6 +23,7 @@ type Config struct {
 	ConfigFile          string `yaml:"-"`
 	DownloadDir         string `yaml:"-"`
 	SessionFile         string `yaml:"-"`
+	Listen              string `yaml:"listen"`
 	OAuthClientID       string `yaml:"oauthClientId"`
 	OAuthScope          string `yaml:"oauthScope"`
 	PollInterval        int    `yaml:"pollInterval"`
@@ -46,6 +48,7 @@ func Load() (*Config, error) {
 		ConfigFile:        filepath.Join(configPath, "config.yaml"),
 		DownloadDir:       libraryPath,
 		SessionFile:       filepath.Join(configPath, "session.json"),
+		Listen:            defaultListenAddress,
 		OAuthScope:        "openid videos:watch account:read",
 		PollInterval:      defaultPollInterval,
 		MaxDaysToDownload: defaultMaxDaysToDownload,
@@ -119,7 +122,10 @@ oauthClientId: ""
 # Optional OAuth scope.
 oauthScope: %q
 
-# Polling interval in seconds when running with -daemon.
+# HTTP listen address for the built-in web UI.
+listen: %q
+
+# Polling interval in seconds between subscription scans.
 pollInterval: %d
 
 # Only download missing videos from the last N days.
@@ -128,12 +134,15 @@ maxDaysToDownload: %d
 # Remove managed videos older than N days.
 # Set to 0 to keep videos indefinitely.
 removeOlderThanDays: 0
-`, cfg.OAuthScope, cfg.PollInterval, cfg.MaxDaysToDownload)
+`, cfg.Listen, cfg.OAuthScope, cfg.PollInterval, cfg.MaxDaysToDownload)
 }
 
 func validateConfig(cfg *Config) error {
 	if cfg.OAuthClientID == "" {
 		return fmt.Errorf("config.yaml is missing oauthClientId")
+	}
+	if cfg.Listen == "" {
+		cfg.Listen = defaultListenAddress
 	}
 	if cfg.OAuthScope == "" {
 		cfg.OAuthScope = "openid videos:watch account:read"

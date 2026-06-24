@@ -1,11 +1,11 @@
-package sync
+package floatplane
 
 import (
 	"testing"
 	"time"
 
 	"github.com/Timendus/fetchplane/internal/config"
-	"github.com/Timendus/fetchplane/internal/floatplane"
+	"github.com/Timendus/fetchplane/internal/floatplane/api"
 	"github.com/Timendus/fetchplane/internal/state"
 )
 
@@ -19,9 +19,9 @@ func TestSaveTokenPreservesExistingRefreshTokenWhenRefreshResponseOmitsIt(t *tes
 	service := New(&config.Config{
 		OAuthClientID: "client-id",
 		SessionFile:   dir + "/session.json",
-	}, floatplane.NewClient(), st)
+	}, api.NewClient(), st)
 
-	err := service.saveToken(&floatplane.OAuthToken{
+	err := service.saveToken(&api.OAuthToken{
 		AccessToken: "new-access",
 		TokenType:   "Bearer",
 		Scope:       "scope",
