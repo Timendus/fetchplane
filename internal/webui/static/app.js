@@ -177,9 +177,6 @@ function render(snapshot) {
       "<div class='job-kind'>" +
       escapeHtml(job.kind) +
       "</div>" +
-      "<div class='job-target'>" +
-      escapeHtml(job.target || "") +
-      "</div>" +
       "</div>" +
       "<div class='job-status " +
       statusClass(job.status) +
@@ -188,7 +185,7 @@ function render(snapshot) {
       "</div>" +
       "</div>" +
       "<div class='job-details" +
-      (job.error ? " job-error" : " muted") +
+      (job.error ? " job-error" : "") +
       "'>" +
       escapeHtml(detailText) +
       "</div>" +
