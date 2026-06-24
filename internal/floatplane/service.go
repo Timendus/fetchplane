@@ -101,40 +101,34 @@ func (s *Service) Snapshot() Snapshot {
 		pending = &copy
 	}
 
-	jobSnapshots := make([]JobSnapshot, 0, maxRecentJobs)
+	jobSnapshots := make([]JobSnapshot, 0, len(s.history)+len(s.queue)+1)
 	if s.current != nil {
 		jobSnapshots = append(jobSnapshots, normalizeThumbnailPath(s.cfg.DownloadDir, s.current.snapshot))
 	}
 
-	queued := append([]*queuedJob(nil), s.queue...)
-	slices.SortFunc(queued, func(a, b *queuedJob) int {
-		if a.snapshot.RunAt.Before(b.snapshot.RunAt) {
+	for _, queuedJob := range s.queue {
+		jobSnapshots = append(jobSnapshots, normalizeThumbnailPath(s.cfg.DownloadDir, queuedJob.snapshot))
+	}
+	for _, finished := range s.history {
+		jobSnapshots = append(jobSnapshots, normalizeThumbnailPath(s.cfg.DownloadDir, finished))
+	}
+	slices.SortFunc(jobSnapshots, func(a, b JobSnapshot) int {
+		if a.QueuedAt.After(b.QueuedAt) {
 			return -1
 		}
-		if a.snapshot.RunAt.After(b.snapshot.RunAt) {
+		if a.QueuedAt.Before(b.QueuedAt) {
 			return 1
 		}
-		if a.snapshot.ID < b.snapshot.ID {
+		if a.ID > b.ID {
 			return -1
 		}
-		if a.snapshot.ID > b.snapshot.ID {
+		if a.ID < b.ID {
 			return 1
 		}
 		return 0
 	})
-
-	for _, queuedJob := range queued {
-		if len(jobSnapshots) >= maxRecentJobs {
-			break
-		}
-		jobSnapshots = append(jobSnapshots, normalizeThumbnailPath(s.cfg.DownloadDir, queuedJob.snapshot))
-	}
-
-	for _, finished := range s.history {
-		if len(jobSnapshots) >= maxRecentJobs {
-			break
-		}
-		jobSnapshots = append(jobSnapshots, normalizeThumbnailPath(s.cfg.DownloadDir, finished))
+	if len(jobSnapshots) > maxRecentJobs {
+		jobSnapshots = jobSnapshots[:maxRecentJobs]
 	}
 
 	authenticated := false
