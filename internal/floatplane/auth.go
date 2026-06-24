@@ -6,24 +6,7 @@ import (
 	"time"
 
 	"github.com/Timendus/fetchplane/internal/floatplane/api"
-	"github.com/Timendus/fetchplane/internal/floatplane/runtime"
 )
-
-type AuthenticationError struct {
-	err error
-}
-
-func (e *AuthenticationError) Error() string {
-	return e.err.Error()
-}
-
-func (e *AuthenticationError) Unwrap() error {
-	return e.err
-}
-
-func newAuthenticationError(format string, args ...any) error {
-	return &AuthenticationError{err: fmt.Errorf(format, args...)}
-}
 
 func (s *Service) EnsureAuthenticated(allowLoginStart bool) (bool, error) {
 	currentAuth := s.authState()
@@ -60,12 +43,12 @@ func (s *Service) EnsureAuthenticated(allowLoginStart bool) (bool, error) {
 	}
 
 	if pending := s.currentPendingAuth(); pending != nil {
-		return false, runtime.Skipf("authentication pending")
+		return false, Skipf("authentication pending")
 	}
 
 	if !allowLoginStart {
 		s.setLastAuthError("login required")
-		return false, runtime.Skipf("login required")
+		return false, Skipf("login required")
 	}
 
 	if _, err := s.StartOrReuseLogin("sync"); err != nil {
@@ -73,13 +56,13 @@ func (s *Service) EnsureAuthenticated(allowLoginStart bool) (bool, error) {
 		return false, err
 	}
 
-	return false, runtime.Skipf("authentication pending")
+	return false, Skipf("authentication pending")
 }
 
-func (s *Service) WaitForPendingAuth() error {
+func (s *Service) waitForPendingAuth() error {
 	pending := s.currentPendingAuth()
 	if pending == nil {
-		return runtime.Skipf("no active login session")
+		return Skipf("no active login session")
 	}
 
 	interval := pending.Interval
@@ -92,7 +75,7 @@ func (s *Service) WaitForPendingAuth() error {
 
 		pending = s.currentPendingAuth()
 		if pending == nil {
-			return runtime.Skipf("login session cleared")
+			return Skipf("login session cleared")
 		}
 
 		token, oauthErr, err := s.client.PollDeviceAuthorization(s.cfg.OAuthClientID, pending.DeviceCode)
@@ -107,7 +90,7 @@ func (s *Service) WaitForPendingAuth() error {
 
 			s.clearPendingAuth("authenticated")
 			s.setLastAuthError("")
-			s.ScheduleNextSync(time.Now())
+			s.scheduleNextSync(time.Now())
 			return nil
 		}
 		if oauthErr == nil {
@@ -121,17 +104,17 @@ func (s *Service) WaitForPendingAuth() error {
 			interval += 5 * time.Second
 			continue
 		default:
-			err := newAuthenticationError("device authorization failed: %s", firstNonEmpty(oauthErr.ErrorDescription, oauthErr.Error))
+			err := fmt.Errorf("device authorization failed: %s", firstNonEmpty(oauthErr.ErrorDescription, oauthErr.Error))
 			s.clearPendingAuth(err.Error())
 			s.setLastAuthError(err.Error())
 			return err
 		}
 	}
 
-	err := newAuthenticationError("device authorization timed out")
+	err := fmt.Errorf("device authorization timed out")
 	s.clearPendingAuth(err.Error())
 	s.setLastAuthError(err.Error())
-	return runtime.Skipf("%s", err.Error())
+	return Skipf("%s", err.Error())
 }
 
 func (s *Service) clearAuth() error {

@@ -1,36 +1,34 @@
-package jobs
+package floatplane
 
 import (
 	"fmt"
 	"time"
-
-	"github.com/Timendus/fetchplane/internal/floatplane/runtime"
 )
 
 type RootSync struct {
 	Reason string
 }
 
-func (j RootSync) Kind() runtime.Kind {
-	return runtime.KindSyncRoot
+func (j RootSync) Kind() Kind {
+	return KindSyncRoot
 }
 
 func (j RootSync) Target() string {
 	return j.Reason
 }
 
-func (j RootSync) Run(ctx *runtime.Context) error {
-	authenticated, err := ctx.Runtime().EnsureAuthenticated(j.Reason == "startup")
+func (j RootSync) Run(s *Service, ctx *jobContext) error {
+	authenticated, err := s.EnsureAuthenticated(j.Reason == "startup")
 	if err != nil {
 		return err
 	}
 	if !authenticated {
-		return runtime.Skipf("authentication pending")
+		return Skipf("authentication pending")
 	}
 
-	ctx.Runtime().ScheduleNextSync(time.Now())
+	s.scheduleNextSync(time.Now())
 
-	subs, err := ctx.Runtime().GetSubscriptions()
+	subs, err := s.client.GetSubscriptions()
 	if err != nil {
 		return err
 	}

@@ -1,6 +1,9 @@
-package runtime
+package floatplane
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 type Kind string
 
@@ -22,7 +25,7 @@ const (
 	StatusSkipped   Status = "skipped"
 )
 
-type Snapshot struct {
+type JobSnapshot struct {
 	ID            int64     `json:"id"`
 	Kind          Kind      `json:"kind"`
 	Target        string    `json:"target"`
@@ -41,5 +44,21 @@ type Snapshot struct {
 type Job interface {
 	Kind() Kind
 	Target() string
-	Run(*Context) error
+	Run(*Service, *jobContext) error
+}
+
+type StatusError struct {
+	Status Status
+	Msg    string
+}
+
+func (e *StatusError) Error() string {
+	return e.Msg
+}
+
+func Skipf(format string, args ...any) error {
+	return &StatusError{
+		Status: StatusSkipped,
+		Msg:    fmt.Sprintf(format, args...),
+	}
 }

@@ -10,8 +10,6 @@ import (
 
 	"github.com/Timendus/fetchplane/internal/config"
 	"github.com/Timendus/fetchplane/internal/floatplane/api"
-	"github.com/Timendus/fetchplane/internal/floatplane/jobs"
-	"github.com/Timendus/fetchplane/internal/floatplane/runtime"
 	"github.com/Timendus/fetchplane/internal/state"
 )
 
@@ -28,17 +26,12 @@ type Service struct {
 	lastAuthErr  string
 	queue        []*queuedJob
 	current      *queuedJob
-	history      []runtime.Snapshot
+	history      []JobSnapshot
 	nextJobID    int64
 	subscribers  map[chan struct{}]struct{}
 	wakeCh       chan struct{}
 	startOnce    sync.Once
 	loginStartMu sync.Mutex
-}
-
-type preparedCreator struct {
-	Info     *api.CreatorInfo
-	Channels map[string]api.ChannelInfo
 }
 
 type PendingAuth struct {
@@ -51,16 +44,16 @@ type PendingAuth struct {
 }
 
 type Snapshot struct {
-	Authenticated  bool               `json:"authenticated"`
-	TokenExpiresAt time.Time          `json:"tokenExpiresAt"`
-	PendingAuth    *PendingAuth       `json:"pendingAuth,omitempty"`
-	LastAuthError  string             `json:"lastAuthError"`
-	Jobs           []runtime.Snapshot `json:"jobs"`
+	Authenticated  bool          `json:"authenticated"`
+	TokenExpiresAt time.Time     `json:"tokenExpiresAt"`
+	PendingAuth    *PendingAuth  `json:"pendingAuth,omitempty"`
+	LastAuthError  string        `json:"lastAuthError"`
+	Jobs           []JobSnapshot `json:"jobs"`
 }
 
 type queuedJob struct {
-	snapshot runtime.Snapshot
-	job      runtime.Job
+	snapshot JobSnapshot
+	job      Job
 }
 
 func New(cfg *config.Config, client *api.Client, st *state.State) *Service {
@@ -81,6 +74,22 @@ func (s *Service) Start() {
 	})
 }
 
+func (s *Service) scheduleNextSync(from time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	runAt := from.Add(time.Duration(s.cfg.PollInterval) * time.Second)
+	if s.current != nil && s.current.job.Kind() == KindSyncRoot {
+		return
+	}
+	for _, queued := range s.queue {
+		if queued.job.Kind() == KindSyncRoot {
+			return
+		}
+	}
+	s.enqueueJobLocked(RootSync{Reason: "scheduled"}, runAt, 0)
+}
+
 func (s *Service) Snapshot() Snapshot {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -92,7 +101,7 @@ func (s *Service) Snapshot() Snapshot {
 		pending = &copy
 	}
 
-	jobSnapshots := make([]runtime.Snapshot, 0, maxRecentJobs)
+	jobSnapshots := make([]JobSnapshot, 0, maxRecentJobs)
 	if s.current != nil {
 		jobSnapshots = append(jobSnapshots, normalizeThumbnailPath(s.cfg.DownloadDir, s.current.snapshot))
 	}
@@ -145,7 +154,7 @@ func (s *Service) Snapshot() Snapshot {
 	}
 }
 
-func normalizeThumbnailPath(downloadDir string, snapshot runtime.Snapshot) runtime.Snapshot {
+func normalizeThumbnailPath(downloadDir string, snapshot JobSnapshot) JobSnapshot {
 	if snapshot.ThumbnailPath == "" {
 		return snapshot
 	}
@@ -180,7 +189,7 @@ func (s *Service) RequestSyncNow(reason string) bool {
 
 	now := time.Now()
 	for _, queued := range s.queue {
-		if queued.job.Kind() != runtime.KindSyncRoot {
+		if queued.job.Kind() != KindSyncRoot {
 			continue
 		}
 		if queued.snapshot.RunAt.After(now) {
@@ -192,11 +201,11 @@ func (s *Service) RequestSyncNow(reason string) bool {
 		return true
 	}
 
-	if s.current != nil && s.current.job.Kind() == runtime.KindSyncRoot {
+	if s.current != nil && s.current.job.Kind() == KindSyncRoot {
 		return false
 	}
 
-	s.enqueueJobLocked(jobs.RootSync{Reason: reason}, now, 0)
+	s.enqueueJobLocked(RootSync{Reason: reason}, now, 0)
 	return true
 }
 
@@ -230,16 +239,16 @@ func (s *Service) StartOrReuseLogin(reason string) (string, error) {
 	s.mu.Lock()
 	s.pendingAuth = pending
 	s.lastAuthErr = ""
-	if s.current == nil || s.current.job.Kind() != runtime.KindAuthWait {
+	if s.current == nil || s.current.job.Kind() != KindAuthWait {
 		hasQueuedAuthWait := false
 		for _, queued := range s.queue {
-			if queued.job.Kind() == runtime.KindAuthWait {
+			if queued.job.Kind() == KindAuthWait {
 				hasQueuedAuthWait = true
 				break
 			}
 		}
 		if !hasQueuedAuthWait {
-			s.enqueueJobLocked(jobs.AuthWait{}, time.Now(), 0)
+			s.enqueueJobLocked(AuthWait{}, time.Now(), 0)
 		}
 	}
 	s.notifyLocked()
