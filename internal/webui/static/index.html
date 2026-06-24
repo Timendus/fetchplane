@@ -1,39 +1,46 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Fetchplane</title>
-  <link rel="stylesheet" href="/static/app.css">
-</head>
-<body>
-  <main>
-    <h1>Fetchplane</h1>
-    <div class="grid">
-      <section class="card">
-        <h2>Authentication</h2>
-        <div id="auth-card"></div>
-        <div class="actions">
-          <form id="login-form" method="post" action="/auth/login" target="_blank">
-            <button type="submit">Log in</button>
-          </form>
-          <form id="sync-form" method="post" action="/sync/now">
-            <button type="submit">Check now</button>
-          </form>
-        </div>
-      </section>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Fetchplane</title>
+    <link rel="stylesheet" href="/static/app.css" />
+  </head>
+  <body>
+    <main>
+      <h1>Fetchplane</h1>
+      <div class="grid">
+        <section class="card">
+          <h2>Authentication</h2>
+          <div id="auth-card"></div>
+          <div class="actions">
+            <form
+              id="login-form"
+              method="post"
+              action="/auth/login"
+              target="_blank"
+            >
+              <button type="submit">Log in</button>
+            </form>
+          </div>
+        </section>
+
+        <section class="card">
+          <h2>Job runner</h2>
+          <div id="runner-card"></div>
+          <div class="actions">
+            <form id="sync-form" method="post" action="/sync/now">
+              <button type="submit">Start new sync job</button>
+            </form>
+          </div>
+        </section>
+      </div>
 
       <section class="card">
-        <h2>Runner</h2>
-        <div id="runner-card"></div>
+        <h2>Recent Jobs</h2>
+        <div id="jobs-list" class="jobs-list"></div>
       </section>
-    </div>
-
-    <section class="card">
-      <h2>Recent Jobs</h2>
-      <div id="jobs-list" class="jobs-list"></div>
-    </section>
-  </main>
-  <script src="/static/app.js" defer></script>
-</body>
+    </main>
+    <script src="/static/app.js" defer></script>
+  </body>
 </html>

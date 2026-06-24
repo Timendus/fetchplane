@@ -18,7 +18,7 @@ function escapeHtml(value) {
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
-    .replaceAll("\"", "&quot;")
+    .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
 }
 
@@ -87,6 +87,7 @@ function render(snapshot) {
   const authCard = document.getElementById("auth-card");
   const runnerCard = document.getElementById("runner-card");
   const jobsList = document.getElementById("jobs-list");
+  const loginForm = document.getElementById("login-form");
 
   let authHtml = "<p>Status: ";
   authHtml += snapshot.authenticated
@@ -94,26 +95,50 @@ function render(snapshot) {
     : "<span class='status-warn'>login required</span>";
   authHtml += "</p>";
   if (snapshot.tokenExpiresAt) {
-    authHtml += "<p class='muted'>Token expiry: " + escapeHtml(snapshot.tokenExpiresAt) + "</p>";
+    authHtml +=
+      "<p class='muted'>Token expiry: " +
+      escapeHtml(snapshot.tokenExpiresAt) +
+      "</p>";
   }
   if (snapshot.pendingAuth) {
-    authHtml += "<p>Current login URL: <a href='" + escapeAttr(snapshot.pendingAuth.url) + "' target='_blank'>" + escapeHtml(snapshot.pendingAuth.url) + "</a></p>";
-    authHtml += "<p>Enter code <code>" + escapeHtml(snapshot.pendingAuth.userCode) + "</code></p>";
-    authHtml += "<p class='muted'>Expires at " + escapeHtml(snapshot.pendingAuth.expiresAt) + "</p>";
-  } else {
-    authHtml += "<p class='muted'>No active login session.</p>";
+    authHtml +=
+      "<p>Current login URL: <a href='" +
+      escapeAttr(snapshot.pendingAuth.url) +
+      "' target='_blank'>" +
+      escapeHtml(snapshot.pendingAuth.url) +
+      "</a></p>";
+    authHtml +=
+      "<p>Enter code <code>" +
+      escapeHtml(snapshot.pendingAuth.userCode) +
+      "</code></p>";
+    authHtml +=
+      "<p class='muted'>Expires at " +
+      escapeHtml(snapshot.pendingAuth.expiresAt) +
+      "</p>";
   }
   if (snapshot.lastAuthError) {
-    authHtml += "<p class='status-bad'>Last auth error: " + escapeHtml(snapshot.lastAuthError) + "</p>";
+    authHtml +=
+      "<p class='status-bad'>Last auth error: " +
+      escapeHtml(snapshot.lastAuthError) +
+      "</p>";
   }
   authCard.innerHTML = authHtml;
+  loginForm.hidden = snapshot.authenticated;
 
-  const currentJob = snapshot.jobs.find((job) => job.status === "running") || snapshot.jobs.find((job) => job.status === "queued");
+  const currentJob =
+    snapshot.jobs.find((job) => job.status === "running") ||
+    snapshot.jobs.find((job) => job.status === "queued");
   let runnerHtml = "";
   if (currentJob) {
-    runnerHtml += "<p>Current job: <strong>" + escapeHtml(currentJob.kind) + "</strong> " + escapeHtml(currentJob.target || "") + "</p>";
+    runnerHtml +=
+      "<p>Current job: <strong>" +
+      escapeHtml(currentJob.kind) +
+      "</strong> " +
+      escapeHtml(currentJob.target || "") +
+      "</p>";
     if (currentJob.details) {
-      runnerHtml += "<p class='muted'>" + escapeHtml(currentJob.details) + "</p>";
+      runnerHtml +=
+        "<p class='muted'>" + escapeHtml(currentJob.details) + "</p>";
     }
   } else {
     runnerHtml += "<p class='muted'>Idle.</p>";
@@ -132,7 +157,10 @@ function render(snapshot) {
 
     let media = "";
     if (job.thumbnailUrl) {
-      media = "<img class='thumb' src='" + escapeAttr(job.thumbnailUrl) + "' alt='thumbnail'>";
+      media =
+        "<img class='thumb' src='" +
+        escapeAttr(job.thumbnailUrl) +
+        "' alt='thumbnail'>";
     } else if (job.kind === "video.download") {
       media = "<div class='thumb-placeholder'>Pending thumb</div>";
     } else {
@@ -140,19 +168,35 @@ function render(snapshot) {
     }
 
     card.innerHTML =
-      "<div class='job-media'>" + media + "</div>" +
+      "<div class='job-media'>" +
+      media +
+      "</div>" +
       "<div class='job-body'>" +
       "<div class='job-header'>" +
       "<div class='job-title'>" +
-      "<div class='job-kind'>" + escapeHtml(job.kind) + "</div>" +
-      "<div class='job-target'>" + escapeHtml(job.target || "") + "</div>" +
+      "<div class='job-kind'>" +
+      escapeHtml(job.kind) +
       "</div>" +
-      "<div class='job-status " + statusClass(job.status) + "'>" + escapeHtml(job.status) + "</div>" +
+      "<div class='job-target'>" +
+      escapeHtml(job.target || "") +
       "</div>" +
-      "<div class='job-details" + (job.error ? " job-error" : " muted") + "'>" + escapeHtml(detailText) + "</div>" +
+      "</div>" +
+      "<div class='job-status " +
+      statusClass(job.status) +
+      "'>" +
+      escapeHtml(job.status) +
+      "</div>" +
+      "</div>" +
+      "<div class='job-details" +
+      (job.error ? " job-error" : " muted") +
+      "'>" +
+      escapeHtml(detailText) +
+      "</div>" +
       "<div class='job-footer'>" +
       "<div></div>" +
-      "<div class='job-times muted'>" + times + "</div>" +
+      "<div class='job-times muted'>" +
+      times +
+      "</div>" +
       "</div>" +
       "</div>";
     jobsList.appendChild(card);
@@ -166,7 +210,9 @@ function render(snapshot) {
 }
 
 async function loadSnapshot() {
-  const response = await fetch("/api/snapshot", { headers: { Accept: "application/json" } });
+  const response = await fetch("/api/snapshot", {
+    headers: { Accept: "application/json" },
+  });
   if (!response.ok) {
     throw new Error("snapshot request failed");
   }
