@@ -1,49 +1,72 @@
 # Fetchplane
 
-Small Floatplane downloader for personal use in a Docker container. It allows
-you to log in to Floatplane and then scans subscribed creators on a schedule,
-and stores videos these creators release. It can also remove old files if you so
-desire.
+Fetchplane is a simple Floatplane downloader for personal use, intended
+primarily as a Docker container. It allows you to log in to Floatplane and then
+scans subscribed creators on a schedule, and stores videos these creators
+release. It can also remove old files if you so desire.
 
 ## What it does
 
-- Authenticates with Floatplane using OAuth device login
-- Persists OAuth session tokens so later runs do not need a fresh device login
-- Polls your subscriptions for creator posts with video attachments
+- Authenticates with Floatplane
+- Polls subscriptions for new videos
 - Downloads videos into per-creator and per-subchannel folders
 - Saves thumbnails, `.nfo` files and subtitles next to downloaded videos
 - Saves logos and cover art for the creators/channels
+- Has a simple web interface to log in with and to show what's being downloaded
 
 ## Configuration
 
-The app uses two paths:
+The app uses two paths in environment variables:
 
 - `LIBRARY_PATH`: where downloaded media is stored. Defaults to `/downloads`.
 - `CONFIG_PATH`: where `config.yaml` and `session.json` live. Defaults to `/config`.
 
-At startup it ensures these paths exist:
+At startup it ensures these paths exist, and creates them if needed:
 
 - `LIBRARY_PATH/`
 - `CONFIG_PATH/session.json`
 - `CONFIG_PATH/config.yaml`
 
+`session.json` is managed be the application, and stores information about your
+session with Floatplane. Don't share this file with other people or they will
+have access to your Floatplane account.
+
 If `config.yaml` does not exist yet, the app creates it with defaults and
-comments. You then edit that file to set at least your Floatplane OAuth client
-ID.
+comments. `config.yaml` holds:
 
-`config.yaml` holds:
+_To be hard-coded in the future:_
 
-- `oauthClientId`: required
+- `oauthClientId`: required for Floatplane to accept our application
 - `oauthScope`: defaults to `openid videos:watch account:read`
-- `pollInterval`: defaults to `600`
-- `maxDaysToDownload`: defaults to `7`
-- `removeOlderThanDays`: optional; `0` means keep indefinitely
+
+_To be kept:_
+
+- `listen`: where to run the web service, defaults to `:8080`
+- `pollInterval`: how often to check for new videos, defaults to `600` seconds (10 minutes)
+- `maxDaysToDownload`: how many days of backlog to download, mostly for first start, defaults to `7` days
+- `removeOlderThanDays`: how old videos have to be before we delete them, defaults to `0` days, meaning never delete
+
+## Authentication
+
+When you run the application and it is not authenticated, it will output a
+Floatplane login URL. Open the URL, complete login, and the application will be
+authenticated to start downloading videos.
+
+Alternatively, navigate to the web interface (`http://localhost:8080` by
+default) and click "Log in" to start the same flow.
 
 ## Docker Usage
+
+Requires:
+
+- Docker
+- make
 
 Build the image:
 
 ```sh
+git clone git@github.com:Timendus/fetchplane.git
+cd fetchplane
 make docker-build
 ```
 
@@ -56,64 +79,26 @@ docker run --rm -it \
   fetchplane:latest
 ```
 
-On first run, the container will create `/config/config.yaml`,
-`/config/session.json`, and `/downloads/`. Edit `/config/config.yaml` and set
-`oauthClientId`, then start the container again.
-
-The image defaults to daemon mode. On first authenticated run it will print a
-Floatplane device-login URL. Open the URL, complete login, and the container
-will continue on its own.
-
-For a one-shot run instead of daemon mode:
-
-```sh
-docker run --rm -it \
-  -v "$PWD/downloads:/downloads" \
-  -v "$PWD/config:/config" \
-  --entrypoint /usr/local/bin/fetchplane \
-  fetchplane:latest
-```
-
 ## Local Usage
 
+Requires:
+
+- Go
+- make
+
+To just run locally:
+
 ```sh
-LIBRARY_PATH=storage/downloads CONFIG_PATH=storage/config go run ./cmd/fetchplane
+git clone git@github.com:Timendus/fetchplane.git
+cd fetchplane
+make run
 ```
 
-Add `-daemon` to keep polling. Add `-debug` to see what requests are being done.
+To build a binary to run on another machine:
 
-## Rough Internals
+```sh
+make build
+ls -la dist
+```
 
-The current implementation is intentionally simple:
-
-1. Start up, bootstrap the library/config paths, load `config.yaml`, and load
-   the local OAuth session file.
-2. Reuse a saved OAuth access token if still fresh.
-3. Otherwise refresh with the saved refresh token.
-4. Otherwise start a new OAuth device-login flow and persist the new tokens
-   immediately.
-5. Call `GET /api/v3/user/subscriptions` to enumerate subscribed creators.
-6. For each creator, resolve creator metadata through `GET
-/api/v3/creator/info`.
-7. Prepare creator and channel folders plus artwork before scanning individual
-   posts.
-8. Page through `GET /api/v3/content/creator` and extract video attachment IDs
-   from posts.
-9. Treat the video file on disk as the source of truth: missing videos may be
-   downloaded if they are within the configured download window existing videos
-   have their sidecars repaired if needed
-10. Optionally remove managed videos older than the configured retention window.
-
-The session file only tracks OAuth tokens and expiry. Downloaded videos on disk
-are the canonical sync state.
-
-## Notes For Developers
-
-- The live Floatplane API does not fully match older unofficial docs. Favor
-  working behavior over doc assumptions.
-- OAuth is device-code based now; username/password login is intentionally not
-  used.
-- Response shapes can vary. In particular, creator subscriptions and content
-  attachments have already drifted from older expectations.
-- The codebase is small on purpose. Prefer straightforward changes over
-  abstractions unless the live API forces them.
+Add `-debug` as a flag to the program to see which requests are being fired.
