@@ -89,33 +89,35 @@ function render(snapshot) {
   const jobsList = document.getElementById("jobs-list");
   const loginForm = document.getElementById("login-form");
 
-  let authHtml = "<p>Status: ";
+  let authHtml = "<p><strong>Session status:</strong> ";
   authHtml += snapshot.authenticated
     ? "<span class='status-ok'>authenticated</span>"
     : "<span class='status-warn'>login required</span>";
   authHtml += "</p>";
+  authHtml += "<dl class='job-times muted'>";
   if (snapshot.tokenExpiresAt) {
     authHtml +=
-      "<p class='muted'>Token expiry: " +
+      "<div><dt>Token expiry</dt><dd>" +
       escapeHtml(snapshot.tokenExpiresAt) +
-      "</p>";
+      "</dd></div>";
   }
   if (snapshot.pendingAuth) {
     authHtml +=
-      "<p>Current login URL: <a href='" +
+      "<div><dt>Login URL</dt><dd><a href='" +
       escapeAttr(snapshot.pendingAuth.url) +
       "' target='_blank'>" +
       escapeHtml(snapshot.pendingAuth.url) +
-      "</a></p>";
+      "</a></dd></div>";
     authHtml +=
-      "<p>Enter code <code>" +
+      "<div><dt>Code</dt><dd><code>" +
       escapeHtml(snapshot.pendingAuth.userCode) +
-      "</code></p>";
+      "</code></dd></div>";
     authHtml +=
-      "<p class='muted'>Expires at " +
+      "<div><dt>Login expiry</dt><dd>" +
       escapeHtml(snapshot.pendingAuth.expiresAt) +
-      "</p>";
+      "</dd></div>";
   }
+  authHtml += "</dl>";
   if (snapshot.lastAuthError) {
     authHtml +=
       "<p class='status-bad'>Last auth error: " +
@@ -131,9 +133,9 @@ function render(snapshot) {
   let runnerHtml = "";
   if (currentJob) {
     runnerHtml +=
-      "<p>Current job: <strong>" +
+      "<p><strong>Current job:</strong> " +
       escapeHtml(currentJob.kind) +
-      "</strong> " +
+      " " +
       escapeHtml(currentJob.target || "") +
       "</p>";
     if (currentJob.details) {
@@ -147,12 +149,17 @@ function render(snapshot) {
 
   jobsList.innerHTML = "";
   for (const job of snapshot.jobs) {
+    const item = document.createElement("li");
+    item.className = "job-item";
     const card = document.createElement("article");
     card.className = "job is-" + escapeCss(job.status);
 
     const detailText = job.error || job.details || "No extra details.";
     const times = composeTimes(job)
-      .map((line) => "<div>" + escapeHtml(line) + "</div>")
+      .map((line) => {
+        const parts = line.split(" ");
+        return "<div><dt>" + escapeHtml(parts.shift()) + "</dt><dd>" + escapeHtml(parts.join(" ")) + "</dd></div>";
+      })
       .join("");
 
     let media = "";
@@ -168,39 +175,43 @@ function render(snapshot) {
     }
 
     card.innerHTML =
-      "<div class='job-media'>" +
+      "<figure class='job-media'>" +
       media +
-      "</div>" +
-      "<div class='job-body'>" +
-      "<div class='job-header'>" +
+      "</figure>" +
+      "<section class='job-body'>" +
+      "<header class='job-header'>" +
       "<div class='job-title'>" +
-      "<div class='job-kind'>" +
+      "<p class='job-kind'>" +
       escapeHtml(job.kind) +
+      "</p>" +
+      "<h3 class='job-target'>" +
+      escapeHtml(job.target || job.kind) +
+      "</h3>" +
       "</div>" +
-      "</div>" +
-      "<div class='job-status " +
+      "<p class='job-status " +
       statusClass(job.status) +
       "'>" +
       escapeHtml(job.status) +
-      "</div>" +
-      "</div>" +
-      "<div class='job-details" +
+      "</p>" +
+      "</header>" +
+      "<p class='job-details" +
       (job.error ? " job-error" : "") +
       "'>" +
       escapeHtml(detailText) +
-      "</div>" +
-      "<div class='job-footer'>" +
-      "<div></div>" +
-      "<div class='job-times muted'>" +
+      "</p>" +
+      "<footer class='job-footer'>" +
+      "<span></span>" +
+      "<dl class='job-times muted'>" +
       times +
-      "</div>" +
-      "</div>" +
-      "</div>";
-    jobsList.appendChild(card);
+      "</dl>" +
+      "</footer>" +
+      "</section>";
+    item.appendChild(card);
+    jobsList.appendChild(item);
   }
   if (snapshot.jobs.length === 0) {
-    const empty = document.createElement("div");
-    empty.className = "muted";
+    const empty = document.createElement("li");
+    empty.className = "job-item muted";
     empty.textContent = "No jobs yet.";
     jobsList.appendChild(empty);
   }

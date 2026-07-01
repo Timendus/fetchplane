@@ -7,13 +7,18 @@
     <link rel="stylesheet" href="/static/app.css" />
   </head>
   <body>
-    <main>
-      <h1>Fetchplane</h1>
-      <div class="grid">
-        <section class="card">
-          <h2>Authentication</h2>
-          <div id="auth-card"></div>
-          <div class="actions">
+    <main class="dashboard">
+      <header class="page-header">
+        <h1>Fetchplane</h1>
+      </header>
+
+      <section class="grid" aria-label="Service overview">
+        <section class="card" aria-labelledby="auth-heading">
+          <header class="card-header">
+            <h2 id="auth-heading">Authentication</h2>
+          </header>
+          <section id="auth-card" aria-live="polite"></section>
+          <footer class="actions">
             <form
               id="login-form"
               method="post"
@@ -22,23 +27,27 @@
             >
               <button type="submit">Log in</button>
             </form>
-          </div>
+          </footer>
         </section>
 
-        <section class="card">
-          <h2>Job runner</h2>
-          <div id="runner-card"></div>
-          <div class="actions">
+        <section class="card" aria-labelledby="runner-heading">
+          <header class="card-header">
+            <h2 id="runner-heading">Job runner</h2>
+          </header>
+          <section id="runner-card" aria-live="polite"></section>
+          <footer class="actions">
             <form id="sync-form" method="post" action="/sync/now">
               <button type="submit">Start new sync job</button>
             </form>
-          </div>
+          </footer>
         </section>
-      </div>
+      </section>
 
-      <section class="card">
-        <h2>Recent Jobs</h2>
-        <div id="jobs-list" class="jobs-list"></div>
+      <section class="card" aria-labelledby="jobs-heading">
+        <header class="card-header">
+          <h2 id="jobs-heading">Recent Jobs</h2>
+        </header>
+        <ol id="jobs-list" class="jobs-list" aria-live="polite"></ol>
       </section>
     </main>
     <script src="/static/app.js" defer></script>
