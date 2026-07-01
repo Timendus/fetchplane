@@ -218,7 +218,7 @@ func (s *Server) snapshotView() snapshotView {
 	for _, job := range snapshot.Jobs {
 		row := jobView{
 			Kind:       string(job.Kind),
-			Target:     job.Target,
+			Target:     formatTarget(job),
 			Status:     string(job.Status),
 			QueuedAt:   formatTime(job.QueuedAt),
 			StartedAt:  formatTime(job.StartedAt),
@@ -234,6 +234,16 @@ func (s *Server) snapshotView() snapshotView {
 	}
 
 	return view
+}
+
+func formatTarget(job floatplane.JobSnapshot) string {
+	if job.Kind == floatplane.KindSyncRoot {
+		return "Trigger: " + job.Target
+	}
+	if job.Kind == floatplane.KindCreatorSync && strings.HasPrefix(job.Details, "checking ") {
+		return job.Details[len("checking "):]
+	}
+	return job.Target
 }
 
 func formatTime(value time.Time) string {
