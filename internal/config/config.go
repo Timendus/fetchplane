@@ -14,7 +14,7 @@ const (
 	defaultMaxDaysToDownload = 7
 	defaultLibraryPath       = "/downloads"
 	defaultConfigPath        = "/config"
-	defaultListenAddress     = ":8080"
+	defaultListenAddress     = ":38080"
 )
 
 type Config struct {

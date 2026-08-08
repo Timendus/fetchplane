@@ -41,7 +41,7 @@ _To be hard-coded in the future:_
 
 _To be kept:_
 
-- `listen`: where to run the web service, defaults to `:8080`
+- `listen`: where to run the web service, defaults to `:38080`
 - `pollInterval`: how often to check for new videos, defaults to `600` seconds (10 minutes)
 - `maxDaysToDownload`: how many days of backlog to download, mostly for first start, defaults to `7` days
 - `removeOlderThanDays`: how old videos have to be before we delete them, defaults to `0` days, meaning never delete
@@ -52,7 +52,7 @@ When you run the application and it is not authenticated, it will output a
 Floatplane login URL. Open the URL, complete login, and the application will be
 authenticated to start downloading videos.
 
-Alternatively, navigate to the web interface (`http://localhost:8080` by
+Alternatively, navigate to the web interface (`http://localhost:38080` by
 default) and click "Log in" to start the same flow.
 
 ## Docker Usage
@@ -74,9 +74,24 @@ Run it:
 
 ```sh
 docker run --rm -it \
+  -p 38080:38080 \
   -v "$PWD/downloads:/downloads" \
   -v "$PWD/config:/config" \
   fetchplane:latest
+```
+
+The container serves the web UI on port `38080` by default, so after starting
+the container you can open `http://localhost:38080`.
+
+If you want HTTP request/response logging, pass the `-debug` flag:
+
+```sh
+docker run --rm -it \
+  -p 38080:38080 \
+  -v "$PWD/downloads:/downloads" \
+  -v "$PWD/config:/config" \
+  fetchplane:latest \
+  -debug
 ```
 
 ## Local Usage

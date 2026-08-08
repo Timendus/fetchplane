@@ -20,6 +20,6 @@ ENV CONFIG_PATH=/config
 COPY --from=build /out/fetchplane /usr/local/bin/fetchplane
 
 VOLUME ["/downloads", "/config"]
+EXPOSE 38080
 
 ENTRYPOINT ["/usr/local/bin/fetchplane"]
-CMD ["-daemon"]
