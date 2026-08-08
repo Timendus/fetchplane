@@ -31,6 +31,12 @@ type Config struct {
 	RemoveOlderThanDays int    `yaml:"removeOlderThanDays"`
 }
 
+type Editable struct {
+	PollInterval        int    `yaml:"pollInterval" json:"pollInterval"`
+	MaxDaysToDownload   int    `yaml:"maxDaysToDownload" json:"maxDaysToDownload"`
+	RemoveOlderThanDays int    `yaml:"removeOlderThanDays" json:"removeOlderThanDays"`
+}
+
 func Load() (*Config, error) {
 	libraryPath := os.Getenv("LIBRARY_PATH")
 	if libraryPath == "" {
@@ -84,7 +90,7 @@ func ensureConfigFile(cfg *Config) error {
 		return err
 	}
 
-	if err := os.WriteFile(cfg.ConfigFile, []byte(defaultConfigYAML(cfg)), 0644); err != nil {
+	if err := os.WriteFile(cfg.ConfigFile, []byte(renderConfigYAML(cfg)), 0644); err != nil {
 		return fmt.Errorf("write default config: %w", err)
 	}
 	return nil
@@ -110,14 +116,63 @@ func ensureSessionFile(path string) error {
 	return os.WriteFile(path, []byte("{\n  \"auth\": {}\n}\n"), 0644)
 }
 
-func defaultConfigYAML(cfg *Config) string {
+func ReadEditable(path string) (*Editable, error) {
+	editable := defaultEditable()
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read config file: %w", err)
+	}
+	if err := yaml.Unmarshal(data, editable); err != nil {
+		return nil, fmt.Errorf("parse config file: %w", err)
+	}
+	return editable, nil
+}
+
+func WriteEditable(path string, editable *Editable) error {
+	if err := ValidateEditable(editable); err != nil {
+		return err
+	}
+	cfg := &Config{
+		Listen:            defaultListenAddress,
+		OAuthScope:        "openid videos:watch account:read",
+		PollInterval:      defaultPollInterval,
+		MaxDaysToDownload: defaultMaxDaysToDownload,
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read config file: %w", err)
+	}
+	if err := yaml.Unmarshal(data, cfg); err != nil {
+		return fmt.Errorf("parse config file: %w", err)
+	}
+	cfg.PollInterval = editable.PollInterval
+	cfg.MaxDaysToDownload = editable.MaxDaysToDownload
+	cfg.RemoveOlderThanDays = editable.RemoveOlderThanDays
+	if err := validateConfig(cfg); err != nil {
+		return err
+	}
+	if err := os.WriteFile(path, []byte(renderConfigYAML(cfg)), 0644); err != nil {
+		return fmt.Errorf("write config file: %w", err)
+	}
+	return nil
+}
+
+func defaultEditable() *Editable {
+	return &Editable{
+		PollInterval:      defaultPollInterval,
+		MaxDaysToDownload: defaultMaxDaysToDownload,
+	}
+}
+
+func renderConfigYAML(cfg *Config) string {
 	return fmt.Sprintf(`# Fetchplane configuration
 #
 # This file is created automatically on first run.
 # Fill in oauthClientId before starting a real sync.
 
 # Required: your Floatplane-issued OAuth client ID.
-oauthClientId: ""
+oauthClientId: %q
 
 # Optional OAuth scope.
 oauthScope: %q
@@ -133,8 +188,8 @@ maxDaysToDownload: %d
 
 # Remove managed videos older than N days.
 # Set to 0 to keep videos indefinitely.
-removeOlderThanDays: 0
-`, cfg.Listen, cfg.OAuthScope, cfg.PollInterval, cfg.MaxDaysToDownload)
+removeOlderThanDays: %d
+`, cfg.OAuthClientID, cfg.OAuthScope, cfg.Listen, cfg.PollInterval, cfg.MaxDaysToDownload, cfg.RemoveOlderThanDays)
 }
 
 func validateConfig(cfg *Config) error {
@@ -147,6 +202,22 @@ func validateConfig(cfg *Config) error {
 	if cfg.OAuthScope == "" {
 		cfg.OAuthScope = "openid videos:watch account:read"
 	}
+	if cfg.PollInterval <= 0 {
+		return fmt.Errorf("config.yaml pollInterval must be a positive integer (seconds)")
+	}
+	if cfg.MaxDaysToDownload <= 0 {
+		return fmt.Errorf("config.yaml maxDaysToDownload must be a positive integer")
+	}
+	if cfg.RemoveOlderThanDays < 0 {
+		return fmt.Errorf("config.yaml removeOlderThanDays cannot be negative")
+	}
+	if cfg.RemoveOlderThanDays > 0 && cfg.MaxDaysToDownload > cfg.RemoveOlderThanDays {
+		return fmt.Errorf("config.yaml maxDaysToDownload cannot be greater than removeOlderThanDays")
+	}
+	return nil
+}
+
+func ValidateEditable(cfg *Editable) error {
 	if cfg.PollInterval <= 0 {
 		return fmt.Errorf("config.yaml pollInterval must be a positive integer (seconds)")
 	}

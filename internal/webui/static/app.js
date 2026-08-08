@@ -30,6 +30,12 @@ function escapeCss(value) {
   return String(value).replace(/[^a-z0-9_-]/gi, "");
 }
 
+function setSettingsStatus(message, cls = "muted") {
+  const node = document.getElementById("settings-status");
+  node.className = cls;
+  node.textContent = message;
+}
+
 function jobIcon(kind) {
   if (kind === "auth.login") {
     return `
@@ -158,7 +164,13 @@ function render(snapshot) {
     const times = composeTimes(job)
       .map((line) => {
         const parts = line.split(" ");
-        return "<div><dt>" + escapeHtml(parts.shift()) + "</dt><dd>" + escapeHtml(parts.join(" ")) + "</dd></div>";
+        return (
+          "<div><dt>" +
+          escapeHtml(parts.shift()) +
+          "</dt><dd>" +
+          escapeHtml(parts.join(" ")) +
+          "</dd></div>"
+        );
       })
       .join("");
 
@@ -227,6 +239,24 @@ async function loadSnapshot() {
   return response.json();
 }
 
+async function loadSettings() {
+  const response = await fetch("/api/settings", {
+    headers: { Accept: "application/json" },
+  });
+  if (!response.ok) {
+    throw new Error("settings request failed");
+  }
+  return response.json();
+}
+
+function renderSettings(settings) {
+  document.getElementById("poll-interval").value = settings.pollInterval ?? "";
+  document.getElementById("max-days-to-download").value =
+    settings.maxDaysToDownload ?? "";
+  document.getElementById("remove-older-than-days").value =
+    settings.removeOlderThanDays ?? "";
+}
+
 function connectEvents() {
   const events = new EventSource("/events");
   events.onmessage = (event) => {
@@ -243,12 +273,80 @@ function connectEvents() {
 
 function bindActions() {
   const syncForm = document.getElementById("sync-form");
+  const settingsForm = document.getElementById("settings-form");
+  const settingsDialog = document.getElementById("settings-dialog");
+  const settingsOpen = document.getElementById("settings-open");
+  const settingsClose = document.getElementById("settings-close");
+
+  settingsOpen.addEventListener("click", async () => {
+    if (!settingsDialog.open) {
+      settingsDialog.showModal();
+    }
+    setSettingsStatus("Loading settings...");
+    try {
+      renderSettings(await loadSettings());
+      setSettingsStatus("Saves to config.yaml. Changes apply after restart.");
+    } catch (err) {
+      console.error("settings load failed", err);
+      setSettingsStatus("Could not load settings.", "status-note-bad");
+    }
+  });
+
+  settingsClose.addEventListener("click", () => {
+    settingsDialog.close();
+  });
+
+  settingsDialog.addEventListener("click", (event) => {
+    const rect = settingsDialog.getBoundingClientRect();
+    const clickedBackdrop =
+      event.clientX < rect.left ||
+      event.clientX > rect.right ||
+      event.clientY < rect.top ||
+      event.clientY > rect.bottom;
+    if (clickedBackdrop) {
+      settingsDialog.close();
+    }
+  });
+
   syncForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     try {
       await fetch("/sync/now", { method: "POST" });
     } catch (err) {
       console.error("sync trigger failed", err);
+    }
+  });
+
+  settingsForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+
+    const payload = {
+      pollInterval: Number(document.getElementById("poll-interval").value),
+      maxDaysToDownload: Number(
+        document.getElementById("max-days-to-download").value,
+      ),
+      removeOlderThanDays: Number(
+        document.getElementById("remove-older-than-days").value,
+      ),
+    };
+
+    try {
+      const response = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) {
+        const message = await response.text();
+        throw new Error(message || "settings save failed");
+      }
+      setSettingsStatus(
+        "Saved to config.yaml. Restart to apply.",
+        "status-note-ok",
+      );
+      settingsDialog.close();
+    } catch (err) {
+      setSettingsStatus(String(err.message || err), "status-note-bad");
     }
   });
 }

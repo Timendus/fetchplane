@@ -46,6 +46,7 @@ func (s *Server) ListenAndServe() error {
 	mux.HandleFunc("/", s.handleIndex)
 	mux.Handle("/static/", http.StripPrefix("/static/", s.static))
 	mux.HandleFunc("/api/snapshot", s.handleSnapshot)
+	mux.HandleFunc("/api/settings", s.handleSettings)
 	mux.HandleFunc("/events", s.handleEvents)
 	mux.HandleFunc("/auth/login", s.handleLogin)
 	mux.HandleFunc("/sync/now", s.handleCheckNow)
@@ -87,6 +88,52 @@ func (s *Server) handleSnapshot(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	_, _ = w.Write(data)
+}
+
+func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		settings, err := config.ReadEditable(s.cfg.ConfigFile)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		data, err := json.Marshal(settingsView{
+			PollInterval:        settings.PollInterval,
+			MaxDaysToDownload:   settings.MaxDaysToDownload,
+			RemoveOlderThanDays: settings.RemoveOlderThanDays,
+		})
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_, _ = w.Write(data)
+	case http.MethodPost:
+		var settings settingsView
+		decoder := json.NewDecoder(r.Body)
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&settings); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		editable, err := config.ReadEditable(s.cfg.ConfigFile)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		editable.PollInterval = settings.PollInterval
+		editable.MaxDaysToDownload = settings.MaxDaysToDownload
+		editable.RemoveOlderThanDays = settings.RemoveOlderThanDays
+		if err := config.WriteEditable(s.cfg.ConfigFile, editable); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_, _ = w.Write([]byte(`{"saved":true}`))
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
 }
 
 func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
@@ -195,6 +242,12 @@ type jobView struct {
 	Error        string `json:"error"`
 	Spawned      int    `json:"spawned"`
 	ThumbnailURL string `json:"thumbnailUrl"`
+}
+
+type settingsView struct {
+	PollInterval        int `json:"pollInterval"`
+	MaxDaysToDownload   int `json:"maxDaysToDownload"`
+	RemoveOlderThanDays int `json:"removeOlderThanDays"`
 }
 
 func (s *Server) snapshotView() snapshotView {

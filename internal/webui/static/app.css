@@ -64,6 +64,10 @@ main {
 }
 
 .page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
   margin-bottom: 20px;
 }
 
@@ -112,11 +116,150 @@ h2 {
   color: var(--muted);
 }
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .actions {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
   margin-top: 14px;
+}
+
+.icon-button {
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-button svg {
+  width: 22px;
+  height: 22px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.icon-button-subtle {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  box-shadow: none;
+}
+
+.settings-form,
+.settings-footer {
+  display: grid;
+  gap: 14px;
+}
+
+.settings-dialog {
+  width: min(560px, calc(100vw - 32px));
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 24px;
+  background:
+    linear-gradient(180deg, rgba(29, 72, 124, 0.18), transparent 32%),
+    rgba(7, 17, 31, 0.94);
+  color: var(--text);
+  box-shadow: 0 28px 72px rgba(0, 0, 0, 0.52);
+}
+
+.settings-dialog::backdrop {
+  background: rgba(2, 8, 14, 0.72);
+  backdrop-filter: blur(6px);
+}
+
+.settings-dialog .settings-form {
+  padding: 24px;
+}
+
+.dialog-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.eyebrow {
+  margin: 0 0 6px;
+  color: var(--accent);
+  font:
+    600 12px/1 "IBM Plex Mono",
+    "SFMono-Regular",
+    Consolas,
+    monospace;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.dialog-copy {
+  margin: 0;
+}
+
+.settings-grid {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.field {
+  display: grid;
+  gap: 8px;
+}
+
+.field span {
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-family: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+}
+
+.field input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: rgba(7, 17, 31, 0.78);
+  color: var(--text);
+  padding: 10px 12px;
+  font: inherit;
+}
+
+.field input:focus {
+  outline: 2px solid rgba(57, 167, 255, 0.35);
+  outline-offset: 1px;
+}
+
+.settings-footer {
+  align-items: start;
+}
+
+#settings-status {
+  margin: 0;
+}
+
+.status-note-ok {
+  color: var(--ok);
+}
+
+.status-note-bad {
+  color: var(--bad);
 }
 
 button {
@@ -368,6 +511,14 @@ a {
 }
 
 @media (max-width: 720px) {
+  main {
+    padding-inline: 16px;
+  }
+
+  .page-header {
+    align-items: center;
+  }
+
   .job {
     grid-template-columns: 1fr;
   }
