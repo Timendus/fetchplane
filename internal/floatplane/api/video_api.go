@@ -59,3 +59,32 @@ func (c *Client) GetBlogPosts(creatorID string, limit, fetchAfter int) ([]BlogPo
 	}
 	return result, nil
 }
+
+// GetBlogPost returns the complete post, including its video attachments.
+//
+// The creator content listing is intentionally lightweight and no longer
+// includes attachment data, even when hasVideo=true. Fetch a post separately
+// before deciding which downloads to create.
+func (c *Client) GetBlogPost(postID string) (*BlogPost, error) {
+	u, _ := url.Parse(baseURL + "/api/v3/content/post")
+	q := u.Query()
+	q.Set("id", postID)
+	u.RawQuery = q.Encode()
+
+	resp, err := c.get(u.String())
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		raw, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("content post failed (%d): %s", resp.StatusCode, string(raw))
+	}
+
+	var post BlogPost
+	if err := json.NewDecoder(resp.Body).Decode(&post); err != nil {
+		return nil, fmt.Errorf("content post decode error: %w", err)
+	}
+	return &post, nil
+}

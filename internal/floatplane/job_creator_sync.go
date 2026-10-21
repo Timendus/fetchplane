@@ -68,6 +68,15 @@ func (j CreatorSync) Run(s *Service, ctx *jobContext) error {
 				s.latest[creator.ID] = released
 			}
 
+			// The creator listing only includes post metadata. Floatplane no
+			// longer returns videoAttachments there, so retrieve the complete
+			// post before looking for videos to download.
+			fullPost, err := s.client.GetBlogPost(post.ID)
+			if err != nil {
+				return err
+			}
+			post = *fullPost
+
 			attachments := post.Attachments()
 			if len(attachments) == 0 {
 				continue
