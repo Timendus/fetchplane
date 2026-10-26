@@ -79,9 +79,6 @@ func (s *Service) scheduleNextSync(from time.Time) {
 	defer s.mu.Unlock()
 
 	runAt := from.Add(time.Duration(s.cfg.PollInterval) * time.Second)
-	if s.current != nil && s.current.job.Kind() == KindSyncRoot {
-		return
-	}
 	for _, queued := range s.queue {
 		if queued.job.Kind() == KindSyncRoot {
 			return
