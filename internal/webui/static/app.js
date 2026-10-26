@@ -285,7 +285,7 @@ function bindActions() {
     setSettingsStatus("Loading settings...");
     try {
       renderSettings(await loadSettings());
-      setSettingsStatus("Saves to config.yaml. Changes apply after restart.");
+      setSettingsStatus("Changes apply immediately and save to config.yaml.");
     } catch (err) {
       console.error("settings load failed", err);
       setSettingsStatus("Could not load settings.", "status-note-bad");
@@ -341,7 +341,7 @@ function bindActions() {
         throw new Error(message || "settings save failed");
       }
       setSettingsStatus(
-        "Saved to config.yaml. Restart to apply.",
+        "Saved to config.yaml and applied.",
         "status-note-ok",
       );
       settingsDialog.close();

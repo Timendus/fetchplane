@@ -26,6 +26,7 @@ func (j CreatorSync) Run(s *Service, ctx *jobContext) error {
 	if j.CreatorID == "" {
 		return Skipf("creator ID missing")
 	}
+	settings := s.Settings()
 
 	creator, err := s.client.GetCreatorInfo(j.CreatorID)
 	if err != nil {
@@ -38,15 +39,15 @@ func (j CreatorSync) Run(s *Service, ctx *jobContext) error {
 	}
 
 	ctx.SetDetails("checking " + creator.Title)
-	enqueuePruneJobs(s, ctx, creator.Title, channels)
+	enqueuePruneJobs(s, ctx, creator.Title, channels, settings.RemoveOlderThanDays)
 
 	fetchAfter := 0
 	now := time.Now()
 	incrementalCutoff := s.latest[creator.ID]
 	var downloadCutoff time.Time
-	hasDownloadCutoff := s.cfg.MaxDaysToDownload > 0
+	hasDownloadCutoff := settings.MaxDaysToDownload > 0
 	if hasDownloadCutoff {
-		downloadCutoff = now.AddDate(0, 0, -s.cfg.MaxDaysToDownload)
+		downloadCutoff = now.AddDate(0, 0, -settings.MaxDaysToDownload)
 	}
 
 	for {
@@ -179,11 +180,11 @@ func prepareCreatorLibrary(s *Service, creator *api.CreatorInfo) (map[string]api
 	return channels, nil
 }
 
-func enqueuePruneJobs(s *Service, ctx *jobContext, creatorTitle string, channels map[string]api.ChannelInfo) {
-	if s.cfg.RemoveOlderThanDays <= 0 {
+func enqueuePruneJobs(s *Service, ctx *jobContext, creatorTitle string, channels map[string]api.ChannelInfo, removeOlderThanDays int) {
+	if removeOlderThanDays <= 0 {
 		return
 	}
-	cutoff := time.Now().AddDate(0, 0, -s.cfg.RemoveOlderThanDays)
+	cutoff := time.Now().AddDate(0, 0, -removeOlderThanDays)
 
 	rootDir, err := library.EnsureLibraryDir(s.cfg.DownloadDir, creatorTitle, "")
 	if err != nil {

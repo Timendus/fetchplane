@@ -93,11 +93,7 @@ func (s *Server) handleSnapshot(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		settings, err := config.ReadEditable(s.cfg.ConfigFile)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
+		settings := s.service.Settings()
 		data, err := json.Marshal(settingsView{
 			PollInterval:        settings.PollInterval,
 			MaxDaysToDownload:   settings.MaxDaysToDownload,
@@ -117,15 +113,16 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		editable, err := config.ReadEditable(s.cfg.ConfigFile)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+		editable := config.Editable{
+			PollInterval:        settings.PollInterval,
+			MaxDaysToDownload:   settings.MaxDaysToDownload,
+			RemoveOlderThanDays: settings.RemoveOlderThanDays,
+		}
+		if err := config.WriteEditable(s.cfg.ConfigFile, &editable); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		editable.PollInterval = settings.PollInterval
-		editable.MaxDaysToDownload = settings.MaxDaysToDownload
-		editable.RemoveOlderThanDays = settings.RemoveOlderThanDays
-		if err := config.WriteEditable(s.cfg.ConfigFile, editable); err != nil {
+		if err := s.service.UpdateSettings(editable); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}

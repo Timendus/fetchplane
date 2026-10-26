@@ -20,6 +20,7 @@ type Service struct {
 	client *api.Client
 
 	mu           sync.RWMutex
+	settings     config.Editable
 	state        *state.State
 	latest       map[string]time.Time
 	pendingAuth  *PendingAuth
@@ -58,8 +59,13 @@ type queuedJob struct {
 
 func New(cfg *config.Config, client *api.Client, st *state.State) *Service {
 	return &Service{
-		cfg:         cfg,
-		client:      client,
+		cfg:    cfg,
+		client: client,
+		settings: config.Editable{
+			PollInterval:        cfg.PollInterval,
+			MaxDaysToDownload:   cfg.MaxDaysToDownload,
+			RemoveOlderThanDays: cfg.RemoveOlderThanDays,
+		},
 		state:       st,
 		latest:      map[string]time.Time{},
 		subscribers: map[chan struct{}]struct{}{},
@@ -78,13 +84,41 @@ func (s *Service) scheduleNextSync(from time.Time) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	runAt := from.Add(time.Duration(s.cfg.PollInterval) * time.Second)
+	runAt := from.Add(time.Duration(s.settings.PollInterval) * time.Second)
 	for _, queued := range s.queue {
 		if queued.job.Kind() == KindSyncRoot {
 			return
 		}
 	}
 	s.enqueueJobLocked(RootSync{Reason: "scheduled"}, runAt, 0)
+}
+
+func (s *Service) Settings() config.Editable {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.settings
+}
+
+func (s *Service) UpdateSettings(settings config.Editable) error {
+	if err := config.ValidateEditable(&settings); err != nil {
+		return err
+	}
+
+	s.mu.Lock()
+	s.settings = settings
+	for _, queued := range s.queue {
+		rootSync, ok := queued.job.(RootSync)
+		if !ok || rootSync.Reason != "scheduled" {
+			continue
+		}
+		queued.snapshot.RunAt = time.Now().Add(time.Duration(settings.PollInterval) * time.Second)
+		s.wake()
+		break
+	}
+	s.notifyLocked()
+	s.mu.Unlock()
+
+	return nil
 }
 
 func (s *Service) Snapshot() Snapshot {
