@@ -32,9 +32,9 @@ type Config struct {
 }
 
 type Editable struct {
-	PollInterval        int    `yaml:"pollInterval" json:"pollInterval"`
-	MaxDaysToDownload   int    `yaml:"maxDaysToDownload" json:"maxDaysToDownload"`
-	RemoveOlderThanDays int    `yaml:"removeOlderThanDays" json:"removeOlderThanDays"`
+	PollInterval        int `yaml:"pollInterval" json:"pollInterval"`
+	MaxDaysToDownload   int `yaml:"maxDaysToDownload" json:"maxDaysToDownload"`
+	RemoveOlderThanDays int `yaml:"removeOlderThanDays" json:"removeOlderThanDays"`
 }
 
 func Load() (*Config, error) {
@@ -55,7 +55,8 @@ func Load() (*Config, error) {
 		DownloadDir:       libraryPath,
 		SessionFile:       filepath.Join(configPath, "session.json"),
 		Listen:            defaultListenAddress,
-		OAuthScope:        "openid videos:watch account:read",
+		OAuthClientID:     "floatplane-downloader",
+		OAuthScope:        "openid profile email offline_access",
 		PollInterval:      defaultPollInterval,
 		MaxDaysToDownload: defaultMaxDaysToDownload,
 	}
@@ -135,7 +136,6 @@ func WriteEditable(path string, editable *Editable) error {
 	}
 	cfg := &Config{
 		Listen:            defaultListenAddress,
-		OAuthScope:        "openid videos:watch account:read",
 		PollInterval:      defaultPollInterval,
 		MaxDaysToDownload: defaultMaxDaysToDownload,
 	}
@@ -197,10 +197,10 @@ func validateConfig(cfg *Config) error {
 		return fmt.Errorf("config.yaml is missing oauthClientId")
 	}
 	if cfg.Listen == "" {
-		cfg.Listen = defaultListenAddress
+		return fmt.Errorf("config.yaml is missing listen port")
 	}
 	if cfg.OAuthScope == "" {
-		cfg.OAuthScope = "openid videos:watch account:read"
+		return fmt.Errorf("config.yaml is missing oauthScope")
 	}
 	if cfg.PollInterval <= 0 {
 		return fmt.Errorf("config.yaml pollInterval must be a positive integer (seconds)")
